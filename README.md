@@ -37,6 +37,10 @@ El usuario y la contraseña **no están en el código**: viven en la configuraci
 3. **Conectar la base de datos:** en el proyecto → *Settings → Bindings → Add → D1 database* → nombre de variable `DB`, base `mirakel-apartados`.
 4. **Usuario y contraseña:** *Settings → Variables and Secrets → Add*: `USUARIO` = `Karina` (texto) y `CONTRASENA` = la contraseña que elijas (tipo *Secret*; no la escribas en este repositorio, es público).
 5. **Volver a publicar** para que tome la configuración: *Deployments → ⋯ → Retry deployment*.
-6. Abrir la app en `https://<proyecto>.pages.dev`, entrar e importar el respaldo desde *Ajustes → Importar respaldo (.json)*.
+6. Abrir la app en `https://mirakel-apartados.pages.dev`, entrar e importar el respaldo desde *Ajustes → Importar respaldo (.json)*.
 
 Cada cambio que se sube a `main` en GitHub se publica solo en Cloudflare. La versión de GitHub Pages ya no puede guardar datos (no tiene servidor); conviene apagarla en *Settings → Pages*.
+
+## Versión
+
+La versión se ve en el inicio de sesión, abajo de cada pantalla y en *Ajustes*. Al publicar un cambio, sube el número en `VERSION_APP` (`index.html`) y en `VERSION` (`sw.js`) para que los teléfonos descarguen la versión nueva.

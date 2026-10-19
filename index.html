@@ -81,6 +81,14 @@ p{margin:0}
 .brand-logo{width:54px;height:54px;border-radius:50%;flex:none;box-shadow:0 0 0 3px var(--surface),0 0 0 4px var(--line)}
 .brand-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
 .firma{display:block;width:138px;aspect-ratio:822/174;background-color:var(--rose-ink);-webkit-mask:var(--firma-url) center/contain no-repeat;mask:var(--firma-url) center/contain no-repeat}
+.sync{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--muted);margin-top:3px;white-space:nowrap}
+.sync::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--st-liq);flex:none}
+.sync.subiendo::before{background:var(--st-prox);animation:latido 1s ease-in-out infinite}
+.sync.offline::before{background:var(--st-venc)}
+.sync.ok{color:var(--st-liq)}
+@keyframes latido{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.sync.subiendo::before{animation:none}}
+.version{font-size:11.5px;color:var(--muted);text-align:center;margin:28px 0 0}
 .eyebrow{font-size:10.5px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
 .tabs{display:flex;gap:4px}
 .tab{background:none;border:0;padding:9px 14px;border-radius:999px;cursor:pointer;font-weight:500;font-size:14px;color:var(--muted)}
@@ -316,6 +324,7 @@ textarea.msg{min-height:260px;font-size:14px}
       <p class="err" id="l-err" hidden></p>
       <button class="btn btn-primary" id="l-btn" type="submit">Entrar</button>
     </form>
+    <p class="hint" data-version></p>
   </div>
 </div>
 <div id="app-shell" hidden>
@@ -326,6 +335,7 @@ textarea.msg{min-height:260px;font-size:14px}
       <div class="brand-txt">
         <span class="firma" role="img" aria-label="MiraKel"></span>
         <span class="eyebrow">Accesorios · Apartados</span>
+        <span class="sync" id="sync" role="status" aria-live="polite"></span>
       </div>
     </div>
     <nav class="tabs" aria-label="Secciones">
@@ -340,6 +350,7 @@ textarea.msg{min-height:260px;font-size:14px}
   </header>
   <div id="banner"></div>
   <main id="main"><div class="view"><div class="skel"></div><div class="skel" style="height:220px"></div></div></main>
+  <p class="version" data-version></p>
 </div>
 
 <nav class="bottom-nav" aria-label="Secciones">
@@ -423,6 +434,9 @@ const CLAVE_DATOS = 'mirakel-datos';      // copia local para abrir rápido y si
 const CLAVE_PENDIENTES = 'mirakel-pendientes';
 const CLAVE_SESION = 'mirakel-sesion';
 const CLAVE_SUBIDO = 'mirakel-subido';
+const CLAVE_GUARDADO = 'mirakel-ultimo-guardado';
+const VERSION_APP = '3.1';
+document.querySelectorAll('[data-version]').forEach(el=>{ el.textContent = 'Versión ' + VERSION_APP; });
 
 function leerJSON(k, def){ try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : def; } catch(e){ return def; } }
 function escribirJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){ console.error(e); } }
@@ -446,6 +460,24 @@ function explicarError(e){
   if (e.codigo==='config') return 'Falta configurar Cloudflare (base de datos DB, USUARIO y CONTRASENA).';
   if (e.status===401) return 'Tu sesión expiró. Vuelve a entrar.';
   return 'No se pudo guardar en Cloudflare (' + e.message + '). Se reintentará solo.';
+}
+
+/* Indicador de guardado: en el encabezado, con la hora del último guardado en Cloudflare. */
+function horaGuardado(iso){
+  const d = new Date(iso); if (isNaN(d)) return '';
+  const hora = d.toLocaleTimeString('es-MX', { hour:'numeric', minute:'2-digit' });
+  return d.toDateString()===new Date().toDateString() ? hora : d.toLocaleDateString('es-MX', { day:'numeric', month:'short' }) + ', ' + hora;
+}
+function renderSync(){
+  const el = $('#sync'); if (!el) return;
+  const pend = leerJSON(CLAVE_PENDIENTES, []).length;
+  const ultimo = leerJSON(CLAVE_GUARDADO, null);
+  let cls, txt;
+  if (Store.subiendo && pend){ cls='subiendo'; txt='Guardando en la nube…'; }
+  else if (Store.error || pend){ cls='offline'; txt = pend ? (pend===1 ? '1 cambio sin subir' : pend+' cambios sin subir') : 'Sin conexión'; }
+  else { cls='ok'; txt = ultimo ? 'Guardado en la nube · ' + horaGuardado(ultimo) : 'Al día en la nube'; }
+  el.className = 'sync ' + cls; el.textContent = txt;
+  el.title = ultimo ? 'Último guardado: ' + new Date(ultimo).toLocaleString('es-MX') : '';
 }
 
 const Store = {
@@ -490,7 +522,7 @@ const Store = {
     this.subir();
   },
   async subir(){
-    if (this.subiendo) return; this.subiendo = true;
+    if (this.subiendo) return; this.subiendo = true; renderSync();
     try{
       let cola = leerJSON(CLAVE_PENDIENTES, []);
       while (cola.length){
@@ -498,14 +530,16 @@ const Store = {
         if (op.tipo==='put') await api('PUT', 'registro/'+op.coll+'/'+encodeURIComponent(op.id), op.data);
         else await api('DELETE', 'registro/'+op.coll+'/'+encodeURIComponent(op.id));
         cola = leerJSON(CLAVE_PENDIENTES, []); cola.shift(); escribirJSON(CLAVE_PENDIENTES, cola);
+        escribirJSON(CLAVE_GUARDADO, new Date().toISOString()); renderSync();
       }
       if (this.error){ this.error=null; render(); }
+      renderSync();
     }catch(e){
       console.error(e);
       if (e.status===401){ this.subiendo=false; this.salir(); return; }
       this.error = explicarError(e); render();
     }
-    this.subiendo = false;
+    this.subiendo = false; renderSync();
   },
   encolar(op){ const cola = leerJSON(CLAVE_PENDIENTES, []); cola.push(op); escribirJSON(CLAVE_PENDIENTES, cola); guardarCopia(); render(); this.subir(); },
   newId(){ return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,10); },
@@ -524,11 +558,12 @@ const Store = {
   },
   async importar(respaldo){
     const r = await api('POST', 'importar', { clientas:respaldo.clientas||{}, cuentas:respaldo.cuentas||{}, ajustes:respaldo.ajustes||null });
+    escribirJSON(CLAVE_GUARDADO, new Date().toISOString());
     await this.cargar();
     return { clientas:r.clientas, cuentas:r.cuentas };
   },
   salir(){
-    try{ [CLAVE_SESION, CLAVE_DATOS, CLAVE_PENDIENTES].forEach(k=>localStorage.removeItem(k)); }catch(e){}
+    try{ [CLAVE_SESION, CLAVE_DATOS, CLAVE_PENDIENTES, CLAVE_GUARDADO].forEach(k=>localStorage.removeItem(k)); }catch(e){}
     this.user=null; this.error=null; data.clientas={}; data.cuentas={}; data.ajustes=null; mostrarLogin();
   }
 };
@@ -555,6 +590,7 @@ document.getElementById('f-login').addEventListener('submit', async (ev)=>{
   btn.disabled = false; btn.textContent = 'Entrar';
 });
 window.addEventListener('online', ()=>{ if (Store.user) Store.subir(); });
+window.addEventListener('offline', ()=>{ if (Store.user) renderSync(); });
 document.addEventListener('visibilitychange', ()=>{
   if (!document.hidden && Store.user && Date.now()-Store.ultimaCarga > 30000 && $('#sheet').hidden && !ui.ajustesDirty) Store.cargar();
 });
@@ -662,7 +698,7 @@ let renderPend=false;
 function render(){ if(renderPend) return; renderPend=true; requestAnimationFrame(()=>{ renderPend=false; renderNow(); }); }
 function renderNow(){
   document.querySelectorAll('[data-act="nav"]').forEach(b=>{ if(b.dataset.view===ui.view || (ui.view==='ficha' && b.dataset.view==='clientas')) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
-  renderBanner();
+  renderBanner(); renderSync();
   const main=$('#main');
   if(Store.mode==='cargando' || !(data.cargado.clientas && data.cargado.cuentas)){ return; }
   // Conservar el valor y foco de la búsqueda
@@ -827,7 +863,7 @@ function vAjustes(){
      '<p class="lead"><b>Lo que ya queda preparado:</b></p><ul class="ul"><li>Estados calculados en automático (pendiente, abonando, próximo a vencer, vencido, liquidado).</li><li>Plantillas centralizadas, listas para registrarse como plantillas oficiales.</li><li>Historial de cada mensaje con su tipo, fecha y canal, para que un envío automático sepa qué ya se mandó.</li></ul>'+
      '<p class="lead"><b>Para activarlo después se necesita:</b> una cuenta de WhatsApp Business Platform (Meta) o un servicio compatible, plantillas aprobadas por Meta y un pequeño servidor que revise las fechas cada día y envíe los recordatorios.</p></div>';
   h+='<div class="panel"><h2>Datos</h2><p class="lead">El respaldo completo (.json) guarda todo: clientas, apartados, abonos y ajustes, y se puede volver a importar. El CSV es para abrir en Excel o Google Sheets.</p><div class="actions"><button type="button" class="btn" data-act="exportar-json">Descargar respaldo completo</button><button type="button" class="btn" data-act="exportar">Descargar CSV</button><label class="btn" for="imp-json">Importar respaldo (.json)</label><input id="imp-json" type="file" accept=".json,application/json" hidden>'+(hayEjemplos()?'<button type="button" class="btn btn-danger" data-act="borrar-ejemplos">Borrar clientas de ejemplo</button>':'')+'</div></div>';
-  h+='<div class="panel"><h2>Tu cuenta</h2><p class="lead">Entraste como <b>'+esc(Store.user&&Store.user.nombre||'')+'</b>. Todo se guarda en automático en Cloudflare, y puedes entrar desde cualquier teléfono.</p><div class="actions"><button type="button" class="btn btn-danger" data-act="salir">Cerrar sesión</button></div></div>';
+  h+='<div class="panel"><h2>Tu cuenta</h2><p class="lead">Entraste como <b>'+esc(Store.user&&Store.user.nombre||'')+'</b>. Todo se guarda en automático en Cloudflare, y puedes entrar desde cualquier teléfono.</p><p class="lead">Versión de la app: <b>'+VERSION_APP+'</b></p><div class="actions"><button type="button" class="btn btn-danger" data-act="salir">Cerrar sesión</button></div></div>';
   return h+'</form></section>';
 }
 function cuentaMuestra(){
