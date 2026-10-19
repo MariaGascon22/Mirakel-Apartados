@@ -416,72 +416,120 @@ const TIPO_MSG = {
 const data = { clientas:{}, cuentas:{}, ajustes:null, cargado:{clientas:false, cuentas:false} };
 const ui = { view:'inicio', clientaId:null, filtro:'todos', q:'', openDetails:new Set(), sheet:null, ec:null };
 
-/* ============ Datos guardados en este dispositivo ============
-   Todo se guarda en el navegador del teléfono (localStorage). Descarga un respaldo
-   completo (.json) seguido desde Ajustes para no perder nada. */
-const CLAVE_DATOS = 'mirakel-datos';
+/* ============ Datos: se guardan en automático en Cloudflare ============
+   Cada cambio se sube solo. Si no hay internet, se guarda en el teléfono y se sube
+   en cuanto vuelva la señal. El usuario y la contraseña viven en Cloudflare, no aquí. */
+const CLAVE_DATOS = 'mirakel-datos';      // copia local para abrir rápido y sin señal
+const CLAVE_PENDIENTES = 'mirakel-pendientes';
 const CLAVE_SESION = 'mirakel-sesion';
-const USUARIO = 'Karina';
-const CONTRASENA = 'Karinarazo';
+const CLAVE_SUBIDO = 'mirakel-subido';
+
+function leerJSON(k, def){ try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : def; } catch(e){ return def; } }
+function escribirJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){ console.error(e); } }
+function guardarCopia(){ escribirJSON(CLAVE_DATOS, { clientas:data.clientas, cuentas:data.cuentas, ajustes:data.ajustes }); }
+
+class ErrorApi extends Error { constructor(status, codigo){ super(codigo||('HTTP '+status)); this.status=status; this.codigo=codigo; } }
+async function api(metodo, ruta, cuerpo){
+  const s = leerJSON(CLAVE_SESION, null);
+  const headers = { 'content-type':'application/json' };
+  if (s && s.token) headers.authorization = 'Bearer ' + s.token;
+  const r = await fetch('api/' + ruta, { method:metodo, headers, body: cuerpo===undefined ? undefined : JSON.stringify(cuerpo), cache:'no-store' });
+  let j = null; try { j = await r.json(); } catch(e){}
+  if (!r.ok || !j) throw new ErrorApi(r.status, j && j.error);
+  return j;
+}
+const sinConexion = (e)=>!(e instanceof ErrorApi);
 
 function explicarError(e){
-  const m = String((e && (e.message || e.msg)) || e || '');
-  if (e && (e.name==='QuotaExceededError' || /quota/i.test(m))) return 'Ya no hay espacio para guardar en este dispositivo. Descarga un respaldo y borra apartados viejos.';
-  return 'Ocurrió un error al guardar: ' + m;
+  if (sinConexion(e)) return 'Sin conexión. Tus cambios quedan guardados en el teléfono y se suben solos cuando vuelva la señal.';
+  if (e.status===404 || e.status===405) return 'La app no encuentra el servidor de Cloudflare. Ábrela desde su dirección de Cloudflare Pages.';
+  if (e.codigo==='config') return 'Falta configurar Cloudflare (base de datos DB, USUARIO y CONTRASENA).';
+  if (e.status===401) return 'Tu sesión expiró. Vuelve a entrar.';
+  return 'No se pudo guardar en Cloudflare (' + e.message + '). Se reintentará solo.';
 }
-function leerLocal(){
-  try { const t = localStorage.getItem(CLAVE_DATOS); return t ? JSON.parse(t) : null; } catch(e){ console.error(e); return null; }
-}
-function guardarLocal(){
-  localStorage.setItem(CLAVE_DATOS, JSON.stringify({ clientas:data.clientas, cuentas:data.cuentas, ajustes:data.ajustes }));
-}
-function sesionActiva(){ try { return localStorage.getItem(CLAVE_SESION)===USUARIO; } catch(e){ return false; } }
 
 const Store = {
-  mode:'cargando', user:null, error:null, ultimaCarga:0,
+  mode:'cargando', user:null, error:null, ultimaCarga:0, subiendo:false,
   async init(){
-    if (sesionActiva()){ this.user={ nombre:USUARIO }; mostrarApp(); await this.cargar(); }
+    const s = leerJSON(CLAVE_SESION, null);
+    if (s && s.token){ this.user={ nombre:s.nombre }; mostrarApp(); await this.cargar(); }
     else mostrarLogin();
   },
+  aplicarPendientes(){
+    for (const op of leerJSON(CLAVE_PENDIENTES, [])){
+      if (op.coll==='ajustes'){ if (op.tipo==='put') data.ajustes = op.data; continue; }
+      if (op.tipo==='put') data[op.coll][op.id] = Object.assign({}, op.data, {id:op.id});
+      else delete data[op.coll][op.id];
+    }
+  },
   async cargar(){
-    const d = leerLocal() || {};
-    data.clientas = d.clientas || {};
-    data.cuentas = d.cuentas || {};
-    data.ajustes = d.ajustes || null;
-    this.error=null; this.mode='local'; this.ultimaCarga=Date.now();
+    try{
+      const d = await api('GET', 'datos');
+      const local = leerJSON(CLAVE_DATOS, null);
+      const vacio = !Object.keys(d.clientas).length && !Object.keys(d.cuentas).length;
+      // Primera vez: si el teléfono ya tenía datos guardados, se suben solos a Cloudflare.
+      if (vacio && !leerJSON(CLAVE_SUBIDO, false) && local && (Object.keys(local.clientas||{}).length || Object.keys(local.cuentas||{}).length)){
+        await api('POST', 'importar', local);
+        Object.assign(d, { clientas:local.clientas||{}, cuentas:local.cuentas||{}, ajustes:local.ajustes||d.ajustes });
+      }
+      escribirJSON(CLAVE_SUBIDO, true);
+      data.clientas = d.clientas; data.cuentas = d.cuentas; data.ajustes = d.ajustes;
+      this.aplicarPendientes(); guardarCopia();
+      this.error=null; this.ultimaCarga=Date.now();
+    }catch(e){
+      console.error(e);
+      if (e.status===401){ this.salir(); return; }
+      const d = leerJSON(CLAVE_DATOS, {}) || {};
+      data.clientas = d.clientas||{}; data.cuentas = d.cuentas||{}; data.ajustes = d.ajustes||null;
+      this.aplicarPendientes();
+      this.error = explicarError(e);
+    }
+    this.mode='nube';
     data.cargado.clientas = data.cargado.cuentas = true;
     render();
+    this.subir();
   },
+  async subir(){
+    if (this.subiendo) return; this.subiendo = true;
+    try{
+      let cola = leerJSON(CLAVE_PENDIENTES, []);
+      while (cola.length){
+        const op = cola[0];
+        if (op.tipo==='put') await api('PUT', 'registro/'+op.coll+'/'+encodeURIComponent(op.id), op.data);
+        else await api('DELETE', 'registro/'+op.coll+'/'+encodeURIComponent(op.id));
+        cola = leerJSON(CLAVE_PENDIENTES, []); cola.shift(); escribirJSON(CLAVE_PENDIENTES, cola);
+      }
+      if (this.error){ this.error=null; render(); }
+    }catch(e){
+      console.error(e);
+      if (e.status===401){ this.subiendo=false; this.salir(); return; }
+      this.error = explicarError(e); render();
+    }
+    this.subiendo = false;
+  },
+  encolar(op){ const cola = leerJSON(CLAVE_PENDIENTES, []); cola.push(op); escribirJSON(CLAVE_PENDIENTES, cola); guardarCopia(); render(); this.subir(); },
   newId(){ return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,10); },
   async put(coll, id, obj){
     const body = Object.assign({}, obj); delete body.id;
-    const prev = data[coll][id];
     data[coll][id] = Object.assign({}, body, {id});
-    try { guardarLocal(); } catch(e){ if (prev) data[coll][id]=prev; else delete data[coll][id]; throw e; }
-    render();
+    this.encolar({ tipo:'put', coll, id, data:body });
   },
   async del(coll, id){
-    const prev = data[coll][id];
     delete data[coll][id];
-    try { guardarLocal(); } catch(e){ if (prev) data[coll][id]=prev; throw e; }
-    render();
+    this.encolar({ tipo:'del', coll, id });
   },
   async putAjustes(obj){
-    const prev = data.ajustes;
     data.ajustes = obj;
-    try { guardarLocal(); } catch(e){ data.ajustes=prev; throw e; }
-    render();
+    this.encolar({ tipo:'put', coll:'ajustes', id:'general', data:obj });
   },
   async importar(respaldo){
-    const mapa = (coll)=>{ const o={}; Object.entries(respaldo[coll]||{}).forEach(([id,v])=>{ o[id]=Object.assign({}, v, {id}); }); return o; };
-    const c = mapa('clientas'), k = mapa('cuentas');
-    const prev = { clientas:data.clientas, cuentas:data.cuentas, ajustes:data.ajustes };
-    data.clientas = Object.assign({}, data.clientas, c);
-    data.cuentas = Object.assign({}, data.cuentas, k);
-    if (respaldo.ajustes) data.ajustes = respaldo.ajustes;
-    try { guardarLocal(); } catch(e){ Object.assign(data, prev); throw e; }
-    render();
-    return { clientas:Object.keys(c).length, cuentas:Object.keys(k).length };
+    const r = await api('POST', 'importar', { clientas:respaldo.clientas||{}, cuentas:respaldo.cuentas||{}, ajustes:respaldo.ajustes||null });
+    await this.cargar();
+    return { clientas:r.clientas, cuentas:r.cuentas };
+  },
+  salir(){
+    try{ [CLAVE_SESION, CLAVE_DATOS, CLAVE_PENDIENTES].forEach(k=>localStorage.removeItem(k)); }catch(e){}
+    this.user=null; this.error=null; data.clientas={}; data.cuentas={}; data.ajustes=null; mostrarLogin();
   }
 };
 
@@ -493,15 +541,22 @@ function mostrarLogin(){
 function mostrarApp(){ $('#login').hidden = true; $('#app-shell').hidden = false; }
 document.getElementById('f-login').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
-  const usuario = $('#l-user').value.trim(), password = $('#l-pass').value;
-  const msg = $('#l-err');
-  if (!usuario || !password){ msg.textContent='Escribe tu usuario y tu contraseña.'; msg.hidden=false; return; }
-  if (usuario.toLowerCase()!==USUARIO.toLowerCase() || password!==CONTRASENA){
-    msg.textContent='Usuario o contraseña incorrectos.'; msg.hidden=false; return;
+  const usuario = $('#l-user').value.trim(), contrasena = $('#l-pass').value;
+  const msg = $('#l-err'), btn = $('#l-btn');
+  if (!usuario || !contrasena){ msg.textContent='Escribe tu usuario y tu contraseña.'; msg.hidden=false; return; }
+  btn.disabled = true; btn.textContent = 'Entrando…'; msg.hidden = true;
+  try{
+    const r = await api('POST', 'login', { usuario, contrasena });
+    escribirJSON(CLAVE_SESION, { token:r.token, nombre:r.nombre });
+    Store.user = { nombre:r.nombre }; $('#l-pass').value=''; mostrarApp(); await Store.cargar();
+  }catch(e){
+    msg.textContent = e.status===401 ? 'Usuario o contraseña incorrectos.' : explicarError(e); msg.hidden = false;
   }
-  msg.hidden = true;
-  try { localStorage.setItem(CLAVE_SESION, USUARIO); } catch(e){}
-  Store.user = { nombre:USUARIO }; $('#l-pass').value=''; mostrarApp(); await Store.cargar();
+  btn.disabled = false; btn.textContent = 'Entrar';
+});
+window.addEventListener('online', ()=>{ if (Store.user) Store.subir(); });
+document.addEventListener('visibilitychange', ()=>{
+  if (!document.hidden && Store.user && Date.now()-Store.ultimaCarga > 30000 && $('#sheet').hidden && !ui.ajustesDirty) Store.cargar();
 });
 
 /* ============ Utilidades ============ */
@@ -772,7 +827,7 @@ function vAjustes(){
      '<p class="lead"><b>Lo que ya queda preparado:</b></p><ul class="ul"><li>Estados calculados en automático (pendiente, abonando, próximo a vencer, vencido, liquidado).</li><li>Plantillas centralizadas, listas para registrarse como plantillas oficiales.</li><li>Historial de cada mensaje con su tipo, fecha y canal, para que un envío automático sepa qué ya se mandó.</li></ul>'+
      '<p class="lead"><b>Para activarlo después se necesita:</b> una cuenta de WhatsApp Business Platform (Meta) o un servicio compatible, plantillas aprobadas por Meta y un pequeño servidor que revise las fechas cada día y envíe los recordatorios.</p></div>';
   h+='<div class="panel"><h2>Datos</h2><p class="lead">El respaldo completo (.json) guarda todo: clientas, apartados, abonos y ajustes, y se puede volver a importar. El CSV es para abrir en Excel o Google Sheets.</p><div class="actions"><button type="button" class="btn" data-act="exportar-json">Descargar respaldo completo</button><button type="button" class="btn" data-act="exportar">Descargar CSV</button><label class="btn" for="imp-json">Importar respaldo (.json)</label><input id="imp-json" type="file" accept=".json,application/json" hidden>'+(hayEjemplos()?'<button type="button" class="btn btn-danger" data-act="borrar-ejemplos">Borrar clientas de ejemplo</button>':'')+'</div></div>';
-  h+='<div class="panel"><h2>Tu cuenta</h2><p class="lead">Entraste como <b>'+esc(Store.user&&Store.user.nombre||'')+'</b>. Tus datos se guardan solo en este dispositivo: descarga un respaldo completo seguido para no perderlos.</p><div class="actions"><button type="button" class="btn btn-danger" data-act="salir">Cerrar sesión</button></div></div>';
+  h+='<div class="panel"><h2>Tu cuenta</h2><p class="lead">Entraste como <b>'+esc(Store.user&&Store.user.nombre||'')+'</b>. Todo se guarda en automático en Cloudflare, y puedes entrar desde cualquier teléfono.</p><div class="actions"><button type="button" class="btn btn-danger" data-act="salir">Cerrar sesión</button></div></div>';
   return h+'</form></section>';
 }
 function cuentaMuestra(){
@@ -1000,7 +1055,7 @@ const acciones = {
     catch(e){ if(e && e.name==='AbortError') return; toast('No se pudo compartir. Usa “Descargar como imagen”.'); }
   },
   reintentar(){ Store.cargar(); },
-  async salir(){ try{ localStorage.removeItem(CLAVE_SESION); }catch(e){} Store.user=null; data.clientas={}; data.cuentas={}; data.ajustes=null; mostrarLogin(); },
+  salir(){ Store.salir(); },
   async 'exportar-json'(){
     const r={ version:1, exportado:new Date().toISOString(), clientas:data.clientas, cuentas:data.cuentas, ajustes:data.ajustes };
     guardarArchivo('Respaldo completo MiraKel '+hoyISO()+'.json', new Blob([JSON.stringify(r,null,1)],{type:'application/json'}));
@@ -1085,7 +1140,7 @@ document.addEventListener('change', async e=>{
     if(!r || (typeof r.clientas!=='object' && typeof r.cuentas!=='object')) throw new Error('formato');
     toast('Importando…'); const n=await Store.importar(r);
     toast('Listo: '+n.clientas+' clientas y '+n.cuentas+' apartados importados');
-  }catch(ex){ console.error(ex); toast(ex&&ex.message==='formato'?'Ese archivo no es un respaldo de MiraKel.':explicarError(ex)); }
+  }catch(ex){ console.error(ex); toast(ex&&ex.message==='formato'?'Ese archivo no es un respaldo de MiraKel.':sinConexion(ex)?'Sin conexión. Conéctate a internet para importar el respaldo.':explicarError(ex)); }
   e.target.value='';
 });
 

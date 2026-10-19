@@ -2,7 +2,7 @@
 
 App para llevar los apartados de **MiraKel Accesorios**: clientas, apartados, abonos, estados de cuenta con la marca y mensajes listos para WhatsApp.
 
-Se instala en el celular como app (PWA) y guarda los datos en el mismo dispositivo (en el navegador).
+Se instala en el celular como app (PWA) y guarda todo en automático en Cloudflare (base de datos D1).
 
 ## Qué incluye
 
@@ -20,21 +20,23 @@ Se instala en el celular como app (PWA) y guarda los datos en el mismo dispositi
 | `index.html` | La app completa |
 | `manifest.webmanifest`, `icons/` | Nombre e ícono al instalarla en el celular |
 | `sw.js` | Hace que abra rápido y se pueda instalar |
+| `functions/api/` | El servidor en Cloudflare: inicio de sesión y guardado de datos |
 | `assets/` | Logo y elementos de la marca |
 | `vendor/` | Librería jsPDF (licencia MIT) |
 
 ## Datos e inicio de sesión
 
-Ya no usa Supabase ni ninguna base de datos en internet. Todo se guarda en el navegador del dispositivo donde se usa la app, así que:
+Los datos se guardan en Cloudflare: cada cambio se sube solo y se ve igual desde cualquier teléfono. Si no hay señal, el cambio se queda en el teléfono y se sube cuando vuelve la conexión.
 
-- Los datos de un teléfono no aparecen en otro. Para pasarlos, descarga el respaldo completo (.json) en uno e impórtalo en el otro desde *Ajustes → Importar respaldo*.
-- Si se borran los datos del navegador o se desinstala la app, se pierden los registros. Descarga el respaldo completo seguido.
+El usuario y la contraseña **no están en el código**: viven en la configuración de Cloudflare (variables `USUARIO` y `CONTRASENA`). Para cambiar la contraseña, cámbiala ahí y vuelve a publicar.
 
-Para entrar: usuario **Karina**, contraseña **Karinarazo** (están en `index.html`). Esta contraseña solo evita que alguien abra la app por descuido en el teléfono; no es una protección fuerte, porque cualquiera que vea el código puede leerla.
+## Configurar Cloudflare (una sola vez)
 
-## Publicar
+1. **Crear la base de datos:** en dash.cloudflare.com → *Storage & databases → D1 SQL database → Create* → nombre `mirakel-apartados`. La tabla se crea sola.
+2. **Crear el sitio:** *Workers & Pages → Create → Pages → Connect to Git* → elegir este repositorio, rama `main`. *Framework preset:* None. *Build command:* vacío. *Build output directory:* `/`. Guardar y publicar.
+3. **Conectar la base de datos:** en el proyecto → *Settings → Bindings → Add → D1 database* → nombre de variable `DB`, base `mirakel-apartados`.
+4. **Usuario y contraseña:** *Settings → Variables and Secrets → Add*: `USUARIO` = `Karina` (texto) y `CONTRASENA` = `Karinarazo` (tipo *Secret*).
+5. **Volver a publicar** para que tome la configuración: *Deployments → ⋯ → Retry deployment*.
+6. Abrir la app en `https://<proyecto>.pages.dev`, entrar e importar el respaldo desde *Ajustes → Importar respaldo (.json)*.
 
-La carpeta se publica tal cual, sin compilar nada. Hay dos opciones:
-
-- **Netlify:** conectar este repositorio en *Add new site → Import from Git*. Cada cambio que se suba a GitHub se publica solo.
-- **GitHub Pages:** *Settings → Pages → Deploy from a branch → main / (root)*.
+Cada cambio que se sube a `main` en GitHub se publica solo en Cloudflare. La versión de GitHub Pages ya no puede guardar datos (no tiene servidor); conviene apagarla en *Settings → Pages*.
