@@ -35,7 +35,7 @@ El usuario y la contraseña **no están en el código**: viven en la configuraci
 1. **Crear la base de datos:** en dash.cloudflare.com → *Storage & databases → D1 SQL database → Create* → nombre `mirakel-apartados`. La tabla se crea sola.
 2. **Crear el sitio:** *Workers & Pages → Create → Pages → Connect to Git* → elegir este repositorio, rama `main`. *Framework preset:* None. *Build command:* vacío. *Build output directory:* `/`. Guardar y publicar.
 3. **Conectar la base de datos:** en el proyecto → *Settings → Bindings → Add → D1 database* → nombre de variable `DB`, base `mirakel-apartados`.
-4. **Usuario y contraseña:** *Settings → Variables and Secrets → Add*: `USUARIO` = `Karina` (texto) y `CONTRASENA` = `Karinarazo` (tipo *Secret*).
+4. **Usuario y contraseña:** *Settings → Variables and Secrets → Add*: `USUARIO` = `Karina` (texto) y `CONTRASENA` = la contraseña que elijas (tipo *Secret*; no la escribas en este repositorio, es público).
 5. **Volver a publicar** para que tome la configuración: *Deployments → ⋯ → Retry deployment*.
 6. Abrir la app en `https://<proyecto>.pages.dev`, entrar e importar el respaldo desde *Ajustes → Importar respaldo (.json)*.
 
