@@ -1,14 +1,14 @@
 /* MiraKel Apartados: guarda la app en el teléfono para que abra rápido.
-   Los datos de clientas NO se guardan aquí: siempre vienen de tu base de datos. */
-const VERSION = 'mirakel-v1';
-const ARCHIVOS = ['./','./index.html','./manifest.webmanifest','./vendor/supabase.js','./vendor/jspdf.umd.min.js',
+   Los datos de clientas NO se guardan aquí: se guardan en el navegador del teléfono. */
+const VERSION = 'mirakel-v2';
+const ARCHIVOS = ['./','./index.html','./manifest.webmanifest','./vendor/jspdf.umd.min.js',
   './assets/logo.png','./assets/wings.png','./assets/firma.png',
   './icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png','./icons/favicon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   const req = e.request; const url = new URL(req.url);
-  if (req.method !== 'GET' || url.origin !== self.location.origin) return; // Supabase y fuentes van directo a internet
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return; // las fuentes van directo a internet
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(r => { const copia = r.clone(); caches.open(VERSION).then(c => c.put('./index.html', copia)); return r; })
       .catch(() => caches.match('./index.html')));

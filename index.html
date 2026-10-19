@@ -311,12 +311,11 @@ textarea.msg{min-height:260px;font-size:14px}
     <span class="firma" role="img" aria-label="MiraKel"></span>
     <span class="eyebrow">Apartados</span>
     <form id="f-login" novalidate>
-      <div class="field"><label for="l-email">Correo</label><input id="l-email" type="email" autocomplete="username" inputmode="email"></div>
+      <div class="field"><label for="l-user">Usuario</label><input id="l-user" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
       <div class="field"><label for="l-pass">Contraseña</label><input id="l-pass" type="password" autocomplete="current-password"></div>
       <p class="err" id="l-err" hidden></p>
       <button class="btn btn-primary" id="l-btn" type="submit">Entrar</button>
     </form>
-    <p class="hint">Usa el correo y la contraseña que creaste en Supabase (Authentication → Users).</p>
   </div>
 </div>
 <div id="app-shell" hidden>
@@ -360,7 +359,6 @@ textarea.msg{min-height:260px;font-size:14px}
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="vendor/jspdf.umd.min.js" defer></script>
-<script src="vendor/supabase.js"></script>
 <script>
 (function(){
 "use strict";
@@ -418,102 +416,92 @@ const TIPO_MSG = {
 const data = { clientas:{}, cuentas:{}, ajustes:null, cargado:{clientas:false, cuentas:false} };
 const ui = { view:'inicio', clientaId:null, filtro:'todos', q:'', openDetails:new Set(), sheet:null, ec:null };
 
-/* ============ Conexión a tu base de datos (Supabase) ============
-   La llave publicable es pública por diseño: la seguridad la dan tu usuario y las reglas
-   "Solo la duena" de cada tabla. Nunca pongas aquí la llave secret / service_role. */
-const SUPABASE_URL = 'https://lqgokadzwrqumxuvxeyx.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_Hq1jXETFSbOvttseJd87jg_PsEfSyPX';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:false } });
+/* ============ Datos guardados en este dispositivo ============
+   Todo se guarda en el navegador del teléfono (localStorage). Descarga un respaldo
+   completo (.json) seguido desde Ajustes para no perder nada. */
+const CLAVE_DATOS = 'mirakel-datos';
+const CLAVE_SESION = 'mirakel-sesion';
+const USUARIO = 'Karina';
+const CONTRASENA = 'Karinarazo';
 
 function explicarError(e){
   const m = String((e && (e.message || e.msg)) || e || '');
-  const code = e && e.code;
-  if (code==='42P01' || code==='PGRST205' || /does not exist|Could not find the table/i.test(m)) return 'Faltan las tablas en tu base de datos. Repite el paso 3 de la guía (SQL Editor → pegar el texto → Run).';
-  if (code==='42501' || /row-level security|permission denied/i.test(m)) return 'Tu base de datos no permitió guardar. Revisa que el paso 3 de la guía haya terminado con “Success”.';
-  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sin conexión a internet. Revisa tu señal e intenta de nuevo.';
-  if (/JWT|session|token/i.test(m)) return 'Tu sesión expiró. Cierra sesión y vuelve a entrar.';
-  return 'Ocurrió un error con la base de datos: ' + m;
+  if (e && (e.name==='QuotaExceededError' || /quota/i.test(m))) return 'Ya no hay espacio para guardar en este dispositivo. Descarga un respaldo y borra apartados viejos.';
+  return 'Ocurrió un error al guardar: ' + m;
 }
-function filasAMapa(rows){ const o={}; (rows||[]).forEach(r=>{ o[r.id]=Object.assign({}, r.data||{}, {id:r.id}); }); return o; }
+function leerLocal(){
+  try { const t = localStorage.getItem(CLAVE_DATOS); return t ? JSON.parse(t) : null; } catch(e){ console.error(e); return null; }
+}
+function guardarLocal(){
+  localStorage.setItem(CLAVE_DATOS, JSON.stringify({ clientas:data.clientas, cuentas:data.cuentas, ajustes:data.ajustes }));
+}
+function sesionActiva(){ try { return localStorage.getItem(CLAVE_SESION)===USUARIO; } catch(e){ return false; } }
 
 const Store = {
   mode:'cargando', user:null, error:null, ultimaCarga:0,
   async init(){
-    sb.auth.onAuthStateChange((ev, session)=>{
-      if (ev==='SIGNED_OUT'){ this.user=null; mostrarLogin(); }
-      else if (session && session.user){ this.user=session.user; }
-    });
-    let session=null;
-    try { const r = await sb.auth.getSession(); session = r.data && r.data.session; } catch(e){}
-    if (session){ this.user=session.user; mostrarApp(); await this.cargar(); }
+    if (sesionActiva()){ this.user={ nombre:USUARIO }; mostrarApp(); await this.cargar(); }
     else mostrarLogin();
   },
   async cargar(){
-    try{
-      const res = await Promise.all(['clientas','cuentas','ajustes'].map(t=>sb.from(t).select('id,data')));
-      res.forEach(r=>{ if (r.error) throw r.error; });
-      data.clientas = filasAMapa(res[0].data);
-      data.cuentas = filasAMapa(res[1].data);
-      const g = (res[2].data||[]).find(x=>x.id==='general'); data.ajustes = g ? g.data : null;
-      this.error=null; this.mode='nube'; this.ultimaCarga=Date.now();
-    }catch(e){ console.error(e); this.error=explicarError(e); this.mode='nube'; }
+    const d = leerLocal() || {};
+    data.clientas = d.clientas || {};
+    data.cuentas = d.cuentas || {};
+    data.ajustes = d.ajustes || null;
+    this.error=null; this.mode='local'; this.ultimaCarga=Date.now();
     data.cargado.clientas = data.cargado.cuentas = true;
     render();
   },
   newId(){ return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,10); },
   async put(coll, id, obj){
     const body = Object.assign({}, obj); delete body.id;
-    const { error } = await sb.from(coll).upsert({ id, data:body, updated_at:new Date().toISOString() });
-    if (error) throw error;
-    data[coll][id] = Object.assign({}, body, {id}); render();
+    const prev = data[coll][id];
+    data[coll][id] = Object.assign({}, body, {id});
+    try { guardarLocal(); } catch(e){ if (prev) data[coll][id]=prev; else delete data[coll][id]; throw e; }
+    render();
   },
   async del(coll, id){
-    const { error } = await sb.from(coll).delete().eq('id', id);
-    if (error) throw error;
-    delete data[coll][id]; render();
+    const prev = data[coll][id];
+    delete data[coll][id];
+    try { guardarLocal(); } catch(e){ if (prev) data[coll][id]=prev; throw e; }
+    render();
   },
   async putAjustes(obj){
-    const { error } = await sb.from('ajustes').upsert({ id:'general', data:obj, updated_at:new Date().toISOString() });
-    if (error) throw error;
-    data.ajustes = obj; render();
+    const prev = data.ajustes;
+    data.ajustes = obj;
+    try { guardarLocal(); } catch(e){ data.ajustes=prev; throw e; }
+    render();
   },
   async importar(respaldo){
-    const filas = (coll)=>Object.entries(respaldo[coll]||{}).map(([id,o])=>{ const d=Object.assign({}, o); delete d.id; return {id, data:d, updated_at:new Date().toISOString()}; });
-    const c = filas('clientas'), k = filas('cuentas');
-    if (c.length){ const r = await sb.from('clientas').upsert(c); if (r.error) throw r.error; }
-    if (k.length){ const r = await sb.from('cuentas').upsert(k); if (r.error) throw r.error; }
-    if (respaldo.ajustes){ await this.putAjustes(respaldo.ajustes); }
-    await this.cargar();
-    return { clientas:c.length, cuentas:k.length };
+    const mapa = (coll)=>{ const o={}; Object.entries(respaldo[coll]||{}).forEach(([id,v])=>{ o[id]=Object.assign({}, v, {id}); }); return o; };
+    const c = mapa('clientas'), k = mapa('cuentas');
+    const prev = { clientas:data.clientas, cuentas:data.cuentas, ajustes:data.ajustes };
+    data.clientas = Object.assign({}, data.clientas, c);
+    data.cuentas = Object.assign({}, data.cuentas, k);
+    if (respaldo.ajustes) data.ajustes = respaldo.ajustes;
+    try { guardarLocal(); } catch(e){ Object.assign(data, prev); throw e; }
+    render();
+    return { clientas:Object.keys(c).length, cuentas:Object.keys(k).length };
   }
 };
 
 /* ============ Inicio de sesión ============ */
 function mostrarLogin(){
   $('#app-shell').hidden = true; $('#login').hidden = false;
-  const e = $('#l-email'); if (e) setTimeout(()=>e.focus(), 50);
+  const e = $('#l-user'); if (e) setTimeout(()=>e.focus(), 50);
 }
 function mostrarApp(){ $('#login').hidden = true; $('#app-shell').hidden = false; }
 document.getElementById('f-login').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
-  const email = $('#l-email').value.trim(), password = $('#l-pass').value;
-  const msg = $('#l-err'), btn = $('#l-btn');
-  if (!email || !password){ msg.textContent='Escribe tu correo y tu contraseña.'; msg.hidden=false; return; }
-  btn.disabled = true; btn.textContent = 'Entrando…'; msg.hidden = true;
-  const { data:res, error } = await sb.auth.signInWithPassword({ email, password });
-  btn.disabled = false; btn.textContent = 'Entrar';
-  if (error){
-    const m = String(error.message||'');
-    msg.textContent = /Invalid login/i.test(m) ? 'Correo o contraseña incorrectos.'
-      : /not confirmed/i.test(m) ? 'Tu usuario no está confirmado. En Supabase, crea el usuario de nuevo con “Auto Confirm User” marcado.'
-      : /Failed to fetch|Load failed|NetworkError/i.test(m) ? 'Sin conexión a internet. Revisa tu señal.'
-      : 'No se pudo entrar: ' + m;
-    msg.hidden = false; return;
+  const usuario = $('#l-user').value.trim(), password = $('#l-pass').value;
+  const msg = $('#l-err');
+  if (!usuario || !password){ msg.textContent='Escribe tu usuario y tu contraseña.'; msg.hidden=false; return; }
+  if (usuario.toLowerCase()!==USUARIO.toLowerCase() || password!==CONTRASENA){
+    msg.textContent='Usuario o contraseña incorrectos.'; msg.hidden=false; return;
   }
-  Store.user = res.user; $('#l-pass').value=''; mostrarApp(); await Store.cargar();
-});
-document.addEventListener('visibilitychange', ()=>{
-  if (!document.hidden && Store.user && Date.now()-Store.ultimaCarga > 30000 && $('#sheet').hidden) Store.cargar();
+  msg.hidden = true;
+  try { localStorage.setItem(CLAVE_SESION, USUARIO); } catch(e){}
+  Store.user = { nombre:USUARIO }; $('#l-pass').value=''; mostrarApp(); await Store.cargar();
 });
 
 /* ============ Utilidades ============ */
@@ -784,7 +772,7 @@ function vAjustes(){
      '<p class="lead"><b>Lo que ya queda preparado:</b></p><ul class="ul"><li>Estados calculados en automático (pendiente, abonando, próximo a vencer, vencido, liquidado).</li><li>Plantillas centralizadas, listas para registrarse como plantillas oficiales.</li><li>Historial de cada mensaje con su tipo, fecha y canal, para que un envío automático sepa qué ya se mandó.</li></ul>'+
      '<p class="lead"><b>Para activarlo después se necesita:</b> una cuenta de WhatsApp Business Platform (Meta) o un servicio compatible, plantillas aprobadas por Meta y un pequeño servidor que revise las fechas cada día y envíe los recordatorios.</p></div>';
   h+='<div class="panel"><h2>Datos</h2><p class="lead">El respaldo completo (.json) guarda todo: clientas, apartados, abonos y ajustes, y se puede volver a importar. El CSV es para abrir en Excel o Google Sheets.</p><div class="actions"><button type="button" class="btn" data-act="exportar-json">Descargar respaldo completo</button><button type="button" class="btn" data-act="exportar">Descargar CSV</button><label class="btn" for="imp-json">Importar respaldo (.json)</label><input id="imp-json" type="file" accept=".json,application/json" hidden>'+(hayEjemplos()?'<button type="button" class="btn btn-danger" data-act="borrar-ejemplos">Borrar clientas de ejemplo</button>':'')+'</div></div>';
-  h+='<div class="panel"><h2>Tu cuenta</h2><p class="lead">Entraste como <b>'+esc(Store.user&&Store.user.email||'')+'</b>. Tus datos se guardan en tu base de datos de Supabase y solo tu usuario puede verlos.</p><div class="actions"><button type="button" class="btn btn-danger" data-act="salir">Cerrar sesión</button></div></div>';
+  h+='<div class="panel"><h2>Tu cuenta</h2><p class="lead">Entraste como <b>'+esc(Store.user&&Store.user.nombre||'')+'</b>. Tus datos se guardan solo en este dispositivo: descarga un respaldo completo seguido para no perderlos.</p><div class="actions"><button type="button" class="btn btn-danger" data-act="salir">Cerrar sesión</button></div></div>';
   return h+'</form></section>';
 }
 function cuentaMuestra(){
@@ -1012,7 +1000,7 @@ const acciones = {
     catch(e){ if(e && e.name==='AbortError') return; toast('No se pudo compartir. Usa “Descargar como imagen”.'); }
   },
   reintentar(){ Store.cargar(); },
-  async salir(){ try{ await sb.auth.signOut(); }catch(e){} data.clientas={}; data.cuentas={}; data.ajustes=null; mostrarLogin(); },
+  async salir(){ try{ localStorage.removeItem(CLAVE_SESION); }catch(e){} Store.user=null; data.clientas={}; data.cuentas={}; data.ajustes=null; mostrarLogin(); },
   async 'exportar-json'(){
     const r={ version:1, exportado:new Date().toISOString(), clientas:data.clientas, cuentas:data.cuentas, ajustes:data.ajustes };
     guardarArchivo('Respaldo completo MiraKel '+hoyISO()+'.json', new Blob([JSON.stringify(r,null,1)],{type:'application/json'}));
