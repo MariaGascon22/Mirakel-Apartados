@@ -2,7 +2,7 @@
 
 App para llevar los apartados de **MiraKel Accesorios**: clientas, apartados, abonos, estados de cuenta con la marca y mensajes listos para WhatsApp.
 
-Se instala en el celular como app (PWA) y guarda los datos en Supabase.
+Se instala en el celular como app (PWA) y guarda los datos en el mismo dispositivo (en el navegador).
 
 ## Qué incluye
 
@@ -21,15 +21,16 @@ Se instala en el celular como app (PWA) y guarda los datos en Supabase.
 | `manifest.webmanifest`, `icons/` | Nombre e ícono al instalarla en el celular |
 | `sw.js` | Hace que abra rápido y se pueda instalar |
 | `assets/` | Logo y elementos de la marca |
-| `vendor/` | Librerías: Supabase y jsPDF (licencia MIT) |
+| `vendor/` | Librería jsPDF (licencia MIT) |
 
-## Base de datos
+## Datos e inicio de sesión
 
-Usa un proyecto de Supabase con las tablas `clientas`, `cuentas` y `ajustes`. Cada tabla tiene una regla para que solo el usuario dueño vea y modifique sus datos.
+Ya no usa Supabase ni ninguna base de datos en internet. Todo se guarda en el navegador del dispositivo donde se usa la app, así que:
 
-Datos de conexión: en `index.html` están la URL del proyecto y la llave **publishable**. Esa llave es pública por diseño, y la seguridad la dan el inicio de sesión y las reglas de cada tabla. Nunca se debe poner aquí la llave `secret` ni la `service_role`.
+- Los datos de un teléfono no aparecen en otro. Para pasarlos, descarga el respaldo completo (.json) en uno e impórtalo en el otro desde *Ajustes → Importar respaldo*.
+- Si se borran los datos del navegador o se desinstala la app, se pierden los registros. Descarga el respaldo completo seguido.
 
-En Supabase debe estar **apagado** *Authentication → Sign In / Providers → Allow new users to sign up*, para que nadie más pueda crear cuentas.
+Para entrar: usuario **Karina**, contraseña **Karinarazo** (están en `index.html`). Esta contraseña solo evita que alguien abra la app por descuido en el teléfono; no es una protección fuerte, porque cualquiera que vea el código puede leerla.
 
 ## Publicar
 
