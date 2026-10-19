@@ -22,7 +22,10 @@ Se instala en el celular como app (PWA) y guarda todo en automático en Cloudfla
 | `sw.js` | Hace que abra rápido y se pueda instalar |
 | `functions/api/` | El servidor en Cloudflare: inicio de sesión y guardado de datos |
 | `assets/` | Logo y elementos de la marca |
-| `vendor/` | Librería jsPDF (licencia MIT) |
+| `fonts/` | Fuentes Cormorant Garamond y Montserrat (licencia OFL), guardadas en la app para que abra rápido |
+| `favicon.ico` | Ícono de la pestaña del navegador |
+| `_headers` | Le dice a Cloudflare cuánto tiempo guardar cada archivo en el teléfono |
+| `vendor/` | Librería jsPDF (licencia MIT); solo se descarga al crear un PDF |
 
 ## Datos e inicio de sesión
 

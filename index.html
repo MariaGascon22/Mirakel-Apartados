@@ -11,12 +11,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="MiraKel">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="icons/favicon.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&family=Montserrat:wght@400;500;600;700&display=swap">
+<link rel="preload" href="fonts/montserrat.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/cormorant.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/logo.png" as="image">
 <style>
+/* Fuentes guardadas en la app (Google Fonts, licencia OFL): no esperan a otro servidor. */
+@font-face{font-family:'Cormorant Garamond';font-style:normal;font-weight:300 700;font-display:swap;src:url(fonts/cormorant.woff2) format('woff2')}
+@font-face{font-family:'Cormorant Garamond';font-style:italic;font-weight:300 700;font-display:swap;src:url(fonts/cormorant-italic.woff2) format('woff2')}
+@font-face{font-family:'Montserrat';font-style:normal;font-weight:100 900;font-display:swap;src:url(fonts/montserrat.woff2) format('woff2')}
 /* Layout: header de marca + navegación; contenido en una columna amplia (máx. 1120px); barra inferior en móvil. */
 :root{
   --bg:#FCF5F9;          /* rosa casi blanco */
@@ -315,7 +321,7 @@ textarea.msg{min-height:260px;font-size:14px}
 
 <div class="login" id="login" hidden>
   <div class="login-card">
-    <img src="assets/logo.png" alt="MiraKel Accesorios">
+    <img src="assets/logo.png" alt="MiraKel Accesorios" width="108" height="108" decoding="async">
     <span class="firma" role="img" aria-label="MiraKel"></span>
     <span class="eyebrow">Apartados</span>
     <form id="f-login" novalidate>
@@ -331,7 +337,7 @@ textarea.msg{min-height:260px;font-size:14px}
 <div class="app">
   <header class="top">
     <div class="brand">
-      <img class="brand-logo" src="assets/logo.png" alt="MiraKel Accesorios">
+      <img class="brand-logo" src="assets/logo.png" alt="MiraKel Accesorios" width="54" height="54" decoding="async">
       <div class="brand-txt">
         <span class="firma" role="img" aria-label="MiraKel"></span>
         <span class="eyebrow">Accesorios · Apartados</span>
@@ -369,12 +375,10 @@ textarea.msg{min-height:260px;font-size:14px}
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="vendor/jspdf.umd.min.js" defer></script>
 <script>
 (function(){
 "use strict";
 /* ============ Recursos de marca (extraídos de tu logo) ============ */
-const LOGO_SRC = document.querySelector('.brand-logo').src;
 const WINGS_SRC = "assets/wings.png";
 const FIRMA_SRC = "assets/firma.png";
 document.documentElement.style.setProperty('--wings-url', 'url("'+WINGS_SRC+'")');
@@ -435,7 +439,7 @@ const CLAVE_PENDIENTES = 'mirakel-pendientes';
 const CLAVE_SESION = 'mirakel-sesion';
 const CLAVE_SUBIDO = 'mirakel-subido';
 const CLAVE_GUARDADO = 'mirakel-ultimo-guardado';
-const VERSION_APP = '3.1';
+const VERSION_APP = '3.2';
 document.querySelectorAll('[data-version]').forEach(el=>{ el.textContent = 'Versión ' + VERSION_APP; });
 
 function leerJSON(k, def){ try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : def; } catch(e){ return def; } }
@@ -484,7 +488,13 @@ const Store = {
   mode:'cargando', user:null, error:null, ultimaCarga:0, subiendo:false,
   async init(){
     const s = leerJSON(CLAVE_SESION, null);
-    if (s && s.token){ this.user={ nombre:s.nombre }; mostrarApp(); await this.cargar(); }
+    if (s && s.token){
+      this.user={ nombre:s.nombre }; mostrarApp();
+      // Abre al instante con la copia del teléfono y luego se actualiza con Cloudflare.
+      const d = leerJSON(CLAVE_DATOS, null);
+      if (d){ data.clientas=d.clientas||{}; data.cuentas=d.cuentas||{}; data.ajustes=d.ajustes||null; this.aplicarPendientes(); this.mode='nube'; data.cargado.clientas=data.cargado.cuentas=true; render(); }
+      await this.cargar();
+    }
     else mostrarLogin();
   },
   aplicarPendientes(){
@@ -594,6 +604,11 @@ window.addEventListener('offline', ()=>{ if (Store.user) renderSync(); });
 document.addEventListener('visibilitychange', ()=>{
   if (!document.hidden && Store.user && Date.now()-Store.ultimaCarga > 30000 && $('#sheet').hidden && !ui.ajustesDirty) Store.cargar();
 });
+
+/* El generador de PDF pesa ~360 KB: solo se descarga la primera vez que se pide un PDF. */
+function cargarJsPDF(){
+  return new Promise(res=>{ const sc=document.createElement('script'); sc.src='vendor/jspdf.umd.min.js'; sc.onload=sc.onerror=()=>res(); document.head.appendChild(sc); });
+}
 
 /* ============ Utilidades ============ */
 const $ = (s, el=document)=>el.querySelector(s);
@@ -1099,6 +1114,7 @@ const acciones = {
   async 'ec-png'(){ if(!ui.ec) return; const c=data.cuentas[ui.sheet.cuentaId]; guardarArchivo(nombreArchivo(c,'png'), await canvasBlob(ui.ec)); },
   async 'ec-pdf'(){
     if(!ui.ec) return; const c=data.cuentas[ui.sheet.cuentaId];
+    if(!window.jspdf){ toast('Preparando PDF…'); await cargarJsPDF(); }
     if(!window.jspdf){ toast('No se pudo cargar el generador de PDF. Descarga la imagen.'); return; }
     const pdf=new window.jspdf.jsPDF({unit:'pt', format:[432,540], orientation:'portrait'});
     pdf.addImage(ui.ec.toDataURL('image/jpeg',0.95),'JPEG',0,0,432,540);
