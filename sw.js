@@ -1,6 +1,6 @@
 /* MiraKel Apartados: guarda la app en el teléfono para que abra rápido.
    Los datos de clientas NO se guardan aquí: vienen de Cloudflare (carpeta /api). */
-const VERSION = 'mirakel-v3';
+const VERSION = 'mirakel-3.1'; // súbela junto con VERSION_APP en index.html
 const ARCHIVOS = ['./','./index.html','./manifest.webmanifest','./vendor/jspdf.umd.min.js',
   './assets/logo.png','./assets/wings.png','./assets/firma.png',
   './icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png','./icons/favicon.png'];
