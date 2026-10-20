@@ -131,6 +131,7 @@ p{margin:0}
 .arranque{min-height:100vh;min-height:100dvh;display:grid;place-content:center;justify-items:center;gap:14px;padding:24px;text-align:center;color:var(--muted);font-size:14px}
 .arranque img{width:96px;height:96px;border-radius:50%}
 .arranque[hidden]{display:none}
+.prox-pagos{margin-top:28px}
 .banner{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:var(--r-sm);background:var(--blush-2);border:1px dashed var(--rose);font-size:13px}
 .banner b{color:var(--rose-ink)}
 .banner .btn{margin-left:auto}
@@ -474,7 +475,7 @@ const CLAVE_PENDIENTES = 'mirakel-pendientes';
 const CLAVE_SESION = 'mirakel-sesion';
 const CLAVE_SUBIDO = 'mirakel-subido';
 const CLAVE_GUARDADO = 'mirakel-ultimo-guardado';
-const VERSION_APP = '3.4';
+const VERSION_APP = '3.5';
 document.querySelectorAll('[data-version]').forEach(el=>{ el.textContent = 'Versión ' + VERSION_APP; });
 
 function leerJSON(k, def){ try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : def; } catch(e){ return def; } }
@@ -794,6 +795,12 @@ function vInicio(){
     h+='<div class="list"><div class="empty"><h3>Aún no tienes apartados registrados</h3><p>Registra a tu primera clienta con la pieza que apartó, su anticipo y la fecha límite.</p><button class="btn btn-primary" data-act="nuevo-apartado">'+ICON.plus+'Registrar primer apartado</button></div></div>';
     return h+'</section>';
   }
+  // Próximos pagos: justo debajo de "Por cobrar"
+  h+='<div class="prox-pagos"><div class="sec-title"><h2>Próximos pagos</h2><span class="count">14 días</span></div>';
+  if(proximos.length) h+='<div class="list">'+proximos.map(x=>{ const cl=data.clientas[x.c.clientaId]||{}; const dd=dias(hoy,x.c.proximoPago);
+      return '<button class="row" data-act="ficha" data-id="'+esc(x.c.clientaId)+'" style="grid-template-columns:minmax(0,1fr) auto"><span style="min-width:0"><span class="t" style="display:block">'+esc(cl.nombre||'Clienta')+'</span><span class="s" style="display:block">'+esc(x.c.producto)+' · '+esc(fCorta(x.c.proximoPago))+(dd===0?' · hoy':dd===1?' · mañana':' · en '+dd+' días')+'</span></span><span class="amt num">'+money(x.montoProximo)+'</span></button>'; }).join('')+'</div>';
+  else h+='<div class="list"><div class="empty" style="padding:22px"><p>No hay pagos programados en las próximas dos semanas.</p></div></div>';
+  h+='</div>';
   h+='<div class="grid-2"><div>';
   h+='<div class="sec-title"><h2>Requieren atención</h2><span class="count">'+atencion.length+'</span></div>';
   if(atencion.length){
@@ -803,11 +810,7 @@ function vInicio(){
   } else h+='<div class="list"><div class="empty" style="padding:24px"><p>Todo en orden: ninguna cuenta vencida ni por vencer.</p></div></div>';
   h+='</div><div style="display:grid;gap:28px;align-content:start">';
   h+='<div><div class="sec-title"><h2>Abonos recibidos</h2><span class="count">últimos 6 meses</span></div>'+chartAbonos()+'</div>';
-  h+='<div><div class="sec-title"><h2>Próximos pagos</h2><span class="count">14 días</span></div>';
-  if(proximos.length) h+='<div class="list">'+proximos.slice(0,6).map(x=>{ const cl=data.clientas[x.c.clientaId]||{}; const dd=dias(hoy,x.c.proximoPago);
-      return '<button class="row" data-act="ficha" data-id="'+esc(x.c.clientaId)+'" style="grid-template-columns:minmax(0,1fr) auto"><span style="min-width:0"><span class="t" style="display:block">'+esc(cl.nombre||'Clienta')+'</span><span class="s" style="display:block">'+esc(fCorta(x.c.proximoPago))+(dd===0?' · hoy':dd===1?' · mañana':' · en '+dd+' días')+'</span></span><span class="amt num">'+money(x.montoProximo)+'</span></button>'; }).join('')+'</div>';
-  else h+='<div class="list"><div class="empty" style="padding:22px"><p>No hay pagos programados en las próximas dos semanas.</p></div></div>';
-  h+='</div></div></div></section>';
+  h+='</div></div></section>';
   return h;
 }
 
