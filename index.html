@@ -128,6 +128,9 @@ p{margin:0}
 .update-bar[hidden]{display:none}
 .update-bar .btn{background:#fff;color:var(--rose-deep);border-color:#fff;padding:7px 16px}
 .update-bar + .login{min-height:calc(100dvh - 52px)}
+.arranque{min-height:100vh;min-height:100dvh;display:grid;place-content:center;justify-items:center;gap:14px;padding:24px;text-align:center;color:var(--muted);font-size:14px}
+.arranque img{width:96px;height:96px;border-radius:50%}
+.arranque[hidden]{display:none}
 .banner{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:var(--r-sm);background:var(--blush-2);border:1px dashed var(--rose);font-size:13px}
 .banner b{color:var(--rose-ink)}
 .banner .btn{margin-left:auto}
@@ -327,6 +330,30 @@ textarea.msg{min-height:260px;font-size:14px}
   <button type="button" class="btn btn-sm" id="update-btn">Actualizar</button>
 </div>
 
+<div class="arranque" id="arranque">
+  <img src="assets/logo.png" alt="MiraKel Accesorios" width="96" height="96">
+  <p id="arranque-txt">Abriendo…</p>
+  <button type="button" class="btn btn-primary" id="arranque-btn" hidden>Reparar y volver a abrir</button>
+</div>
+<script>
+/* Red de seguridad: si la app no logra abrir, ofrece borrar la copia guardada y recargar
+   (así nunca se queda la pantalla en blanco). */
+(function(){
+  function fallo(){
+    var a=document.getElementById('arranque'); if(!a || a.hidden) return;
+    document.getElementById('arranque-txt').textContent='La app no terminó de abrir.';
+    document.getElementById('arranque-btn').hidden=false;
+  }
+  window.addEventListener('error', fallo);
+  setTimeout(fallo, 10000);
+  document.getElementById('arranque-btn').addEventListener('click', function(){
+    this.disabled=true; this.textContent='Reparando…';
+    var sw = navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function(rs){ return Promise.all(rs.map(function(r){ return r.unregister(); })); }) : Promise.resolve();
+    var cs = window.caches ? caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); }) : Promise.resolve();
+    Promise.all([sw, cs]).catch(function(){}).then(function(){ location.reload(); });
+  });
+})();
+</script>
 <div class="login" id="login" hidden>
   <div class="login-card">
     <img src="assets/logo.png" alt="MiraKel Accesorios" width="108" height="108" decoding="async">
@@ -447,7 +474,7 @@ const CLAVE_PENDIENTES = 'mirakel-pendientes';
 const CLAVE_SESION = 'mirakel-sesion';
 const CLAVE_SUBIDO = 'mirakel-subido';
 const CLAVE_GUARDADO = 'mirakel-ultimo-guardado';
-const VERSION_APP = '3.3';
+const VERSION_APP = '3.4';
 document.querySelectorAll('[data-version]').forEach(el=>{ el.textContent = 'Versión ' + VERSION_APP; });
 
 function leerJSON(k, def){ try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : def; } catch(e){ return def; } }
@@ -588,10 +615,10 @@ const Store = {
 
 /* ============ Inicio de sesión ============ */
 function mostrarLogin(){
-  $('#app-shell').hidden = true; $('#login').hidden = false;
+  $('#arranque').hidden = true; $('#app-shell').hidden = true; $('#login').hidden = false;
   const e = $('#l-user'); if (e) setTimeout(()=>e.focus(), 50);
 }
-function mostrarApp(){ $('#login').hidden = true; $('#app-shell').hidden = false; }
+function mostrarApp(){ $('#arranque').hidden = true; $('#login').hidden = true; $('#app-shell').hidden = false; }
 document.getElementById('f-login').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
   const usuario = $('#l-user').value.trim(), contrasena = $('#l-pass').value;
@@ -1163,7 +1190,7 @@ const acciones = {
     catch(e){ el.disabled=false; toast('No se pudieron borrar todos. Intenta de nuevo.'); }
   },
   'insertar-var'(el){
-    const ta=$('#t-'+el.dataset.tpl); const v='{'+el.dataset.var+'}'; const s=ta.selectionStart??ta.value.length, e2=ta.selectionEnd??s;
+    const ta=$('#t-'+el.dataset.tpl); const v='{'+el.dataset.var+'}'; const s=ta.selectionStart!=null?ta.selectionStart:ta.value.length, e2=ta.selectionEnd!=null?ta.selectionEnd:s;
     ta.value=ta.value.slice(0,s)+v+ta.value.slice(e2); ta.focus(); ta.setSelectionRange(s+v.length,s+v.length); ui.ajustesDirty=true; previewTpl(el.dataset.tpl); $('#aj-status').textContent='Cambios sin guardar';
   },
   'restaurar-tpl'(el){ const k=el.dataset.tpl; $('#t-'+k).value=PLANTILLAS_BASE[k]; ui.ajustesDirty=true; previewTpl(k); $('#aj-status').textContent='Cambios sin guardar'; },
@@ -1254,32 +1281,24 @@ document.addEventListener('submit', async e=>{
 Store.init();
 /* ============ Versión nueva: botón "Actualizar" arriba ============
    Al publicar un cambio (VERSION en sw.js), el teléfono descarga la versión nueva en segundo
-   plano y aparece el botón. Al tocarlo, se activa y la app se recarga. */
+   plano y aparece el botón. Al tocarlo, la app se recarga con la versión nueva. */
 if('serviceWorker' in navigator){
-  let registro=null, pidio=false, recargando=false;
-  const mostrarActualizar=(sw)=>{
-    if(!sw || !navigator.serviceWorker.controller) return; // primera instalación: no hay nada que actualizar
-    $('#update-bar').hidden=false;
-    sw.postMessage({tipo:'version'});
-  };
+  const esMasNueva=(a,b)=>{ const x=String(a).split('.').map(Number), y=String(b).split('.').map(Number);
+    for(let i=0;i<Math.max(x.length,y.length);i++){ if((x[i]||0)!==(y[i]||0)) return (x[i]||0)>(y[i]||0); } return false; };
+  const habiaVersion = !!navigator.serviceWorker.controller; // en la primera instalación no hay nada que actualizar
   navigator.serviceWorker.addEventListener('message', e=>{
-    if(e.data && e.data.tipo==='version' && e.data.version!==VERSION_APP) $('#update-txt').textContent='Hay una versión nueva: '+e.data.version;
+    if(e.data && e.data.tipo==='version' && esMasNueva(e.data.version, VERSION_APP)){
+      $('#update-txt').textContent='Hay una versión nueva: '+e.data.version; $('#update-bar').hidden=false;
+    }
   });
-  navigator.serviceWorker.addEventListener('controllerchange', ()=>{ if(!pidio || recargando) return; recargando=true; location.reload(); });
-  $('#update-btn').addEventListener('click', ()=>{
-    const b=$('#update-btn'); b.disabled=true; b.textContent='Actualizando…'; pidio=true;
-    if(registro && registro.waiting) registro.waiting.postMessage({tipo:'actualizar'});
-    else location.reload();
-    setTimeout(()=>{ if(!recargando) location.reload(); }, 4000);
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+    const sw=navigator.serviceWorker.controller; if(habiaVersion && sw) sw.postMessage({tipo:'version'});
   });
+  $('#update-btn').addEventListener('click', ()=>{ const b=$('#update-btn'); b.disabled=true; b.textContent='Actualizando…'; location.reload(); });
   window.addEventListener('load', ()=>{
     navigator.serviceWorker.register('sw.js').then(reg=>{
-      registro=reg;
-      if(reg.waiting) mostrarActualizar(reg.waiting);
-      reg.addEventListener('updatefound', ()=>{
-        const nuevo=reg.installing; if(!nuevo) return;
-        nuevo.addEventListener('statechange', ()=>{ if(nuevo.state==='installed') mostrarActualizar(nuevo); });
-      });
+      // Por si la versión nueva ya se instaló mientras la app estaba cerrada.
+      if(navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({tipo:'version'});
       // Busca versión nueva al volver a la app y cada 30 minutos.
       document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) reg.update().catch(()=>{}); });
       setInterval(()=>reg.update().catch(()=>{}), 30*60*1000);
