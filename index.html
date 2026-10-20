@@ -47,6 +47,7 @@
   --st-venc:#A1324F; --st-venc-bg:#F7D7DF;
   --st-liq:#3F7556;  --st-liq-bg:#DCEEE3;
   --wa:#2F8F5B;
+  --oro-btn:#8A6A2E; --oro-btn-hover:#735624; --on-oro:#FFFFFF; /* botón Abono: dorado de la marca, legible con texto blanco */
   --f-display:"Cormorant Garamond","Cormorant",Didot,"Bodoni 72",Georgia,serif;
   --f-body:"Montserrat","Helvetica Neue",Arial,sans-serif;
   --r-sm:10px; --r-md:16px; --r-lg:24px;
@@ -58,7 +59,7 @@
   --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.6);
   --st-pend:#CDBCC5; --st-pend-bg:#3A2E35; --st-abon:#F3B8D5; --st-abon-bg:#4A2B3B;
   --st-prox:#E9C77F; --st-prox-bg:#463722; --st-venc:#FF9DB3; --st-venc-bg:#4D2430;
-  --st-liq:#9DD5B2; --st-liq-bg:#23392C; --wa:#5FC48C; color-scheme:dark;
+  --st-liq:#9DD5B2; --st-liq-bg:#23392C; --wa:#5FC48C; --oro-btn:#D8B97C; --oro-btn-hover:#E6CB94; --on-oro:#2A1E0C; color-scheme:dark;
 }}
 :root[data-theme="dark"]{
   --bg:#1D1519; --surface:#271D23; --blush:#3A2731; --blush-2:#30222A;
@@ -67,7 +68,7 @@
   --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.6);
   --st-pend:#CDBCC5; --st-pend-bg:#3A2E35; --st-abon:#F3B8D5; --st-abon-bg:#4A2B3B;
   --st-prox:#E9C77F; --st-prox-bg:#463722; --st-venc:#FF9DB3; --st-venc-bg:#4D2430;
-  --st-liq:#9DD5B2; --st-liq-bg:#23392C; --wa:#5FC48C; color-scheme:dark;
+  --st-liq:#9DD5B2; --st-liq-bg:#23392C; --wa:#5FC48C; --oro-btn:#D8B97C; --oro-btn-hover:#E6CB94; --on-oro:#2A1E0C; color-scheme:dark;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -109,6 +110,8 @@ p{margin:0}
 .btn svg{width:17px;height:17px;flex:none}
 .btn-primary{background:var(--rose-deep);border-color:var(--rose-deep);color:var(--on-primary)}
 .btn-primary:hover{background:var(--rose-ink);border-color:var(--rose-ink);color:var(--on-primary)}
+.btn-oro{background:var(--oro-btn);border-color:var(--oro-btn);color:var(--on-oro)}
+.btn-oro:hover{background:var(--oro-btn-hover);border-color:var(--oro-btn-hover);color:var(--on-oro)}
 .btn-wa{background:var(--wa);border-color:var(--wa);color:#fff}
 .btn-wa:hover{filter:brightness(1.07);background:var(--wa);border-color:var(--wa)}
 :root[data-theme="dark"] .btn-wa{color:#10251A}
@@ -482,7 +485,7 @@ const CLAVE_PENDIENTES = 'mirakel-pendientes';
 const CLAVE_SESION = 'mirakel-sesion';
 const CLAVE_SUBIDO = 'mirakel-subido';
 const CLAVE_GUARDADO = 'mirakel-ultimo-guardado';
-const VERSION_APP = '3.7';
+const VERSION_APP = '3.8';
 document.querySelectorAll('[data-version]').forEach(el=>{ el.textContent = 'Versión ' + VERSION_APP; });
 
 function leerJSON(k, def){ try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : def; } catch(e){ return def; } }
@@ -864,7 +867,7 @@ function vFicha(){
   const r=resumenClienta(cl.id); const totalAb=r2(r.cs.reduce((s,x)=>s+x.abonado,0)); const totalC=r2(r.cs.reduce((s,x)=>s+x.monto,0));
   let h='<section class="view"><div><button class="back" data-act="nav" data-view="clientas">'+ICON.back+'Clientas</button></div>';
   h+='<div class="ficha-head"><span class="avatar">'+esc(iniciales(cl.nombre))+'</span><div class="info"><h1>'+esc(cl.nombre)+'</h1><div class="contact">'+(cl.telefono?'<span>WhatsApp <b class="num">'+esc(telBonito(cl.telefono))+'</b></span><button class="btn btn-ghost btn-sm" data-act="copiar-tel" data-tel="'+esc(cl.telefono)+'">'+ICON.copy+'Copiar</button>':'<span>Sin teléfono registrado</span>')+(cl.ejemplo?'<span class="pill">Ejemplo</span>':'')+'</div></div>';
-  h+='<div class="actions"><button class="btn" data-act="editar-clienta" data-id="'+esc(cl.id)+'">'+ICON.edit+'Editar</button><button class="btn btn-primary" data-act="nuevo-apartado" data-clienta="'+esc(cl.id)+'">'+ICON.plus+'Nuevo apartado</button></div></div>';
+  h+='<div class="actions"><button class="btn" data-act="editar-clienta" data-id="'+esc(cl.id)+'">'+ICON.edit+'Editar</button><button class="btn btn-oro" data-act="abono-clienta" data-id="'+esc(cl.id)+'">'+ICON.plus+'Abono</button><button class="btn btn-primary" data-act="nuevo-apartado" data-clienta="'+esc(cl.id)+'">'+ICON.plus+'Nuevo apartado</button></div></div>';
   if(cl.notas) h+='<p class="notes">'+esc(cl.notas)+'</p>';
   if(r.cs.length>0) h+='<div class="sum-strip"><div><span>Compras</span><b class="num">'+money(totalC)+'</b></div><div><span>Abonado</span><b class="num">'+money(totalAb)+'</b></div><div><span>Saldo</span><b class="num" style="color:var(--rose-ink)">'+money(r.saldo)+'</b></div></div>';
   h+='<div><div class="sec-title"><h2>Apartados</h2><span class="count">'+r.cs.length+'</span></div>';
@@ -1152,6 +1155,15 @@ const acciones = {
   'nuevo-apartado'(el){ hojaApartado(null, el.dataset.clienta||(ui.view==='ficha'?ui.clientaId:'')); },
   'editar-apartado'(el){ hojaApartado(el.dataset.id); },
   abono(el){ hojaAbono(el.dataset.id); },
+  // +Abono en la ficha: si tiene un solo apartado con saldo, va directo; si tiene varios, pregunta a cuál.
+  'abono-clienta'(el){
+    const cl=data.clientas[el.dataset.id]; if(!cl) return;
+    const activas=Object.values(data.cuentas).filter(c=>c.clientaId===cl.id).map(c=>({c, k:calc(c)})).filter(x=>x.k.estado!=='liquidado');
+    if(!activas.length){ toast(cl.nombre+' no tiene apartados con saldo pendiente.'); return; }
+    if(activas.length===1){ hojaAbono(activas[0].c.id); return; }
+    abrirHoja(headHoja('Registrar abono', '¿A qué apartado de '+esc(cl.nombre)+'?')+'<div class="list">'+activas.map(x=>
+      '<button class="row" data-act="abono" data-id="'+esc(x.c.id)+'" style="grid-template-columns:minmax(0,1fr) auto"><span style="min-width:0"><span class="t" style="display:block">'+esc(x.c.producto)+'</span><span class="s" style="display:block">Compra '+esc(fCorta(x.c.fechaCompra))+' · '+x.k.pct+'% pagado</span></span><span class="amt num">'+money(x.k.saldo)+'</span></button>').join('')+'</div>');
+  },
   msg(el,e){ e.stopPropagation(); hojaMensaje(el.dataset.tipo, el.dataset.id); },
   'copiar-msg'(el){ const c=data.cuentas[el.dataset.id]; if(!c) return; const m=construirMensaje(el.dataset.tipo, c); copiar(m.texto, 'Mensaje copiado'); },
   'copiar-texto'(){ const t=$('#msg-text'); if(t) copiar(t.value,'Mensaje copiado'); },
