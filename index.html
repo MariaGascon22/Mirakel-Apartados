@@ -485,7 +485,7 @@ const CLAVE_PENDIENTES = 'mirakel-pendientes';
 const CLAVE_SESION = 'mirakel-sesion';
 const CLAVE_SUBIDO = 'mirakel-subido';
 const CLAVE_GUARDADO = 'mirakel-ultimo-guardado';
-const VERSION_APP = '3.9';
+const VERSION_APP = '3.10';
 document.querySelectorAll('[data-version]').forEach(el=>{ el.textContent = 'Versión ' + VERSION_APP; });
 
 function leerJSON(k, def){ try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : def; } catch(e){ return def; } }
@@ -1014,15 +1014,10 @@ function hojaApartado(id, clientaPre){
 /* --- Formulario abono --- */
 function hojaAbono(id){
   const c=data.cuentas[id]; if(!c) return; const k=calc(c); const cl=data.clientas[c.clientaId]||{}; const hoy=hoyISO();
-  const sig = c.proximoPago && c.proximoPago>hoy ? c.proximoPago : sumarDias(hoy,15);
   abrirHoja(headHoja('Registrar abono', esc(cl.nombre||'')+' · '+esc(c.producto)+' · saldo <b class="num">'+money(k.saldo)+'</b>')+
    '<form id="f-abono" data-id="'+esc(id)+'" novalidate style="display:grid;gap:14px">'+
-   '<div class="fields"><div class="field"><label for="b-monto">Monto del abono</label><input id="b-monto" type="number" min="0" step="0.01" inputmode="decimal" value="'+(k.montoProximo||'')+'" autofocus><span class="err" id="b-monto-err" hidden></span></div>'+
-   '<div class="field"><label for="b-fecha">Fecha</label><input id="b-fecha" type="date" value="'+hoy+'"></div>'+
-   '<div class="field"><label for="b-metodo">Forma de pago</label><select id="b-metodo"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option><option>Otro</option></select></div></div>'+
-   '<div class="field"><label for="b-nota">Nota</label><input id="b-nota" placeholder="Opcional"></div>'+
-   '<div class="fields" id="b-sig"><div class="field"><label for="b-fprox">Siguiente fecha de pago</label><input id="b-fprox" type="date" value="'+sig+'"></div><div class="field"><label for="b-mprox">Monto del siguiente pago</label><input id="b-mprox" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Opcional" value="'+(c.montoProximo?esc(c.montoProximo):'')+'"></div></div>'+
-   '<p class="hint">Si este abono liquida la cuenta, las fechas de pago ya no se usan.</p>'+
+   '<div class="field"><label for="b-monto">Monto del abono</label><input id="b-monto" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0" autofocus><span class="err" id="b-monto-err" hidden></span></div>'+
+   '<div class="field"><label for="b-fecha">Fecha del abono</label><input id="b-fecha" type="date" value="'+hoy+'"></div>'+
    '<div class="actions" style="justify-content:flex-end"><button class="btn btn-primary" type="submit">Registrar abono</button></div></form>');
 }
 function hojaAbonoListo(c, monto){
@@ -1299,8 +1294,8 @@ document.addEventListener('submit', async e=>{
     if(!(monto>0)){ err('b-monto-err', true, 'Escribe un monto mayor a 0.'); return; }
     if(monto>k.saldo+0.009){ err('b-monto-err', true, 'El abono supera el saldo pendiente ('+money(k.saldo)+').'); return; }
     err('b-monto-err', false); lock(true);
-    const abono={id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), monto, fecha:$('#b-fecha').value||hoyISO(), metodo:$('#b-metodo').value, nota:$('#b-nota').value.trim()};
-    const nuevo=Object.assign({}, c, {abonos:(c.abonos||[]).concat([abono]), proximoPago:$('#b-fprox').value||'', montoProximo:r2($('#b-mprox').value)||0});
+    const abono={id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), monto, fecha:$('#b-fecha').value||hoyISO(), metodo:'', nota:''};
+    const nuevo=Object.assign({}, c, {abonos:(c.abonos||[]).concat([abono])});
     nuevo.id=c.id;
     await Store.put('cuentas', c.id, nuevo);
     hojaAbonoListo(nuevo, monto);
