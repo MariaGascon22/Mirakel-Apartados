@@ -1,6 +1,6 @@
 /* MiraKel Apartados: guarda la app en el teléfono para que abra rápido.
    Los datos de clientas NO se guardan aquí: vienen de Cloudflare (carpeta /api). */
-const VERSION = 'mirakel-3.6'; // súbela junto con VERSION_APP en index.html
+const VERSION = 'mirakel-3.7'; // súbela junto con VERSION_APP en index.html
 // Lo indispensable para abrir. El generador de PDF se guarda la primera vez que se usa.
 // Ojo: no poner './index.html'; Cloudflare lo redirige a './' y Safari no abre páginas redirigidas guardadas.
 const ARCHIVOS = ['./','./manifest.webmanifest','./favicon.ico',
