@@ -132,6 +132,13 @@ p{margin:0}
 .arranque img{width:96px;height:96px;border-radius:50%}
 .arranque[hidden]{display:none}
 .prox-pagos{margin-top:28px}
+.sugs{display:grid;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);overflow:hidden}
+.sugs[hidden]{display:none}
+.sug{display:flex;align-items:center;gap:10px;padding:9px 12px;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;width:100%;color:inherit;font:inherit}
+.sug:last-child{border-bottom:0}
+.sug:hover,.sug:focus-visible{background:var(--blush-2)}
+.sug .avatar{width:30px;height:30px;font-size:13px}
+.sug small{display:block;font-size:12px;color:var(--muted)}
 .banner{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:var(--r-sm);background:var(--blush-2);border:1px dashed var(--rose);font-size:13px}
 .banner b{color:var(--rose-ink)}
 .banner .btn{margin-left:auto}
@@ -475,7 +482,7 @@ const CLAVE_PENDIENTES = 'mirakel-pendientes';
 const CLAVE_SESION = 'mirakel-sesion';
 const CLAVE_SUBIDO = 'mirakel-subido';
 const CLAVE_GUARDADO = 'mirakel-ultimo-guardado';
-const VERSION_APP = '3.5';
+const VERSION_APP = '3.6';
 document.querySelectorAll('[data-version]').forEach(el=>{ el.textContent = 'Versión ' + VERSION_APP; });
 
 function leerJSON(k, def){ try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : def; } catch(e){ return def; } }
@@ -963,27 +970,44 @@ function hojaClienta(id){
    '<div class="actions" style="justify-content:space-between">'+(cl?'<button type="button" class="btn btn-danger" data-act="pedir-borrar-clienta">'+ICON.trash+'Eliminar</button>':'<span></span>')+'<button class="btn btn-primary" type="submit">Guardar</button></div></form>');
 }
 /* --- Formulario apartado --- */
+const PRODUCTOS=['Aretes','Pulseras','Collares','Anillos','Reloj','Varios'];
+const normaliza=(t)=>String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+function clientaPorNombre(nombre){ const n=normaliza(nombre); return n ? Object.values(data.clientas).find(cl=>normaliza(cl.nombre)===n) : null; }
 function hojaApartado(id, clientaPre){
   const c=id?data.cuentas[id]:null; const hoy=hoyISO();
-  const clientas=Object.values(data.clientas).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
-  const sel=c?c.clientaId:(clientaPre||'');
-  const opts='<option value="">Elige una clienta</option>'+clientas.map(cl=>'<option value="'+esc(cl.id)+'"'+(cl.id===sel?' selected':'')+'>'+esc(cl.nombre)+'</option>').join('')+'<option value="__nueva"'+(!clientas.length&&!c?' selected':'')+'>+ Nueva clienta</option>';
-  const nueva=!clientas.length&&!c;
-  abrirHoja(headHoja(c?'Editar apartado':'Nuevo apartado', c?'':'Registra la pieza, el anticipo y las fechas acordadas.')+
+  const sel=c?c.clientaId:(clientaPre||''); const clSel=data.clientas[sel];
+  const prods=PRODUCTOS.slice(); if(c && c.producto && !PRODUCTOS.includes(c.producto)) prods.push(c.producto); // apartados viejos con otro texto
+  const prodOpts='<option value="">Elige el producto</option>'+prods.map(x=>'<option'+(c&&c.producto===x?' selected':'')+'>'+esc(x)+'</option>').join('');
+  abrirHoja(headHoja(c?'Editar apartado':'Nuevo apartado', c?'':'Registra a la clienta, la pieza y el anticipo.')+
    '<form id="f-apartado" data-id="'+esc(id||'')+'" novalidate style="display:grid;gap:14px">'+
-   '<div class="field"><label for="p-clienta">Clienta</label><select id="p-clienta">'+opts+'</select><span class="err" id="p-clienta-err" hidden>Elige o registra a la clienta.</span></div>'+
-   '<div class="fields" id="p-nueva"'+(nueva?'':' hidden')+'><div class="field"><label for="p-nnombre">Nombre de la nueva clienta</label><input id="p-nnombre" autocomplete="off"></div><div class="field"><label for="p-ntel">WhatsApp</label><input id="p-ntel" inputmode="tel" placeholder="33 1234 5678"></div></div>'+
-   '<div class="field"><label for="p-producto">Producto</label><input id="p-producto" placeholder="Ej. Aretes argolla con perla" value="'+esc(c?c.producto:'')+'"><span class="err" id="p-producto-err" hidden>Escribe qué pieza apartó.</span></div>'+
+   '<div class="field"><label for="p-cbusca">Clienta</label><input id="p-cbusca" autocomplete="off" autocapitalize="words" placeholder="Busca o escribe su nombre" value="'+esc(clSel?clSel.nombre:'')+'"><input type="hidden" id="p-clienta" value="'+esc(clSel?sel:'')+'">'+
+   '<div class="sugs" id="p-sugs" hidden></div><span class="help" id="p-chelp" hidden>Clienta nueva: se registrará con este nombre.</span><span class="err" id="p-clienta-err" hidden>Busca o escribe el nombre de la clienta.</span></div>'+
+   '<div class="field" id="p-nueva" hidden><label for="p-ntel">WhatsApp de la clienta nueva</label><input id="p-ntel" inputmode="tel" placeholder="Opcional · 33 1234 5678"></div>'+
+   '<div class="field"><label for="p-producto">Producto</label><select id="p-producto">'+prodOpts+'</select><span class="err" id="p-producto-err" hidden>Elige el producto.</span></div>'+
    '<div class="fields"><div class="field"><label for="p-monto">Precio total</label><input id="p-monto" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0" value="'+(c?esc(c.monto):'')+'"><span class="err" id="p-monto-err" hidden>Escribe un monto mayor a 0.</span></div>'+
    '<div class="field"><label for="p-fcompra">Fecha de compra</label><input id="p-fcompra" type="date" value="'+esc(c?c.fechaCompra:hoy)+'"></div></div>'+
    (c?'':'<div class="fields"><div class="field"><label for="p-anticipo">Anticipo recibido hoy</label><input id="p-anticipo" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"><span class="help">Se registra como primer abono.</span></div><div class="field"><label for="p-metodo">Forma de pago del anticipo</label><select id="p-metodo"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option><option>Otro</option></select></div></div>')+
-   '<div class="fields"><div class="field"><label for="p-fprox">Próximo pago</label><input id="p-fprox" type="date" value="'+esc(c?c.proximoPago||'':sumarDias(hoy,15))+'"></div>'+
-   '<div class="field"><label for="p-mprox">Monto del próximo pago</label><input id="p-mprox" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Opcional" value="'+(c&&c.montoProximo?esc(c.montoProximo):'')+'"></div>'+
-   '<div class="field"><label for="p-flim">Fecha límite para liquidar</label><input id="p-flim" type="date" value="'+esc(c?c.fechaLimite||'':sumarDias(hoy,60))+'"><span class="err" id="p-flim-err" hidden>Elige la fecha límite.</span></div></div>'+
-   '<div class="field"><label for="p-notas">Notas</label><textarea id="p-notas" rows="2">'+esc(c?c.notas||'':'')+'</textarea></div>'+
    '<div id="p-confirm"></div>'+
    '<div class="actions" style="justify-content:space-between">'+(c?'<button type="button" class="btn btn-danger" data-act="pedir-borrar-apartado">'+ICON.trash+'Eliminar apartado</button>':'<span></span>')+'<button class="btn btn-primary" type="submit">Guardar apartado</button></div></form>');
-  $('#p-clienta').addEventListener('change', e=>{ $('#p-nueva').hidden = e.target.value!=='__nueva'; });
+  // Buscador de clienta: elige una de la lista o escribe un nombre nuevo.
+  const inp=$('#p-cbusca'), hid=$('#p-clienta'), sugs=$('#p-sugs');
+  const actualizar=()=>{
+    const q=normaliza(inp.value); const exacta=clientaPorNombre(inp.value);
+    hid.value = exacta ? exacta.id : '';
+    const lista = q ? Object.values(data.clientas).filter(cl=>normaliza(cl.nombre).includes(q)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')).slice(0,6) : [];
+    sugs.innerHTML = lista.map(cl=>'<button type="button" class="sug" data-cid="'+esc(cl.id)+'"><span class="avatar">'+esc(iniciales(cl.nombre))+'</span><span>'+esc(cl.nombre)+(cl.telefono?'<small>'+esc(telBonito(cl.telefono))+'</small>':'')+'</span></button>').join('');
+    sugs.hidden = !lista.length || !!exacta;
+    const nueva = !!q && !exacta;
+    $('#p-chelp').textContent = lista.length ? 'Toca su nombre en la lista. Si no aparece, se registrará como clienta nueva.' : 'Clienta nueva: se registrará con este nombre.';
+    $('#p-chelp').hidden = !nueva; $('#p-nueva').hidden = !nueva || lista.length>0;
+    if(q) $('#p-clienta-err').hidden = true;
+  };
+  inp.addEventListener('input', actualizar);
+  inp.addEventListener('focus', ()=>{ if(!hid.value) actualizar(); });
+  sugs.addEventListener('click', e=>{
+    const bt=e.target.closest('[data-cid]'); if(!bt) return; const cl=data.clientas[bt.dataset.cid]; if(!cl) return;
+    inp.value=cl.nombre; actualizar(); $('#p-producto').focus();
+  });
 }
 /* --- Formulario abono --- */
 function hojaAbono(id){
@@ -1247,15 +1271,14 @@ document.addEventListener('submit', async e=>{
     cerrarHoja(); ui.clientaId=id; ui.view='ficha'; renderNow(); toast('Clienta guardada');
   }
   else if(f.id==='f-apartado'){
-    let clientaId=$('#p-clienta').value; const producto=$('#p-producto').value.trim(); const monto=r2($('#p-monto').value); const flim=$('#p-flim').value;
-    const nuevaNombre=$('#p-nnombre').value.trim();
-    const okCl = clientaId && (clientaId!=='__nueva' || nuevaNombre);
-    err('p-clienta-err', !okCl, clientaId==='__nueva'?'Escribe el nombre de la nueva clienta.':'Elige o registra a la clienta.'); err('p-producto-err', !producto); err('p-monto-err', !(monto>0)); err('p-flim-err', !flim);
-    if(!okCl||!producto||!(monto>0)||!flim) return;
+    const nombre=$('#p-cbusca').value.trim().replace(/\s+/g,' '); const existente=clientaPorNombre(nombre);
+    let clientaId=$('#p-clienta').value || (existente&&existente.id) || ''; const producto=$('#p-producto').value; const monto=r2($('#p-monto').value);
+    err('p-clienta-err', !nombre); err('p-producto-err', !producto); err('p-monto-err', !(monto>0));
+    if(!nombre||!producto||!(monto>0)) return;
     lock(true);
-    if(clientaId==='__nueva'){ clientaId=Store.newId('clientas'); await Store.put('clientas', clientaId, {nombre:nuevaNombre, telefono:$('#p-ntel').value.trim(), notas:'', creada:new Date().toISOString()}); }
+    if(!clientaId){ clientaId=Store.newId('clientas'); await Store.put('clientas', clientaId, {nombre, telefono:$('#p-ntel').value.trim(), notas:'', creada:new Date().toISOString()}); }
     const id=f.dataset.id||Store.newId('cuentas'); const prev=data.cuentas[id]||{};
-    const obj=Object.assign({}, prev, { clientaId, producto, monto, fechaCompra:$('#p-fcompra').value||hoyISO(), proximoPago:$('#p-fprox').value||'', montoProximo:r2($('#p-mprox').value)||0, fechaLimite:flim, notas:$('#p-notas').value.trim(), abonos:prev.abonos||[], mensajes:prev.mensajes||[], creada:prev.creada||new Date().toISOString() });
+    const obj=Object.assign({}, prev, { clientaId, producto, monto, fechaCompra:$('#p-fcompra').value||hoyISO(), abonos:prev.abonos||[], mensajes:prev.mensajes||[], creada:prev.creada||new Date().toISOString() });
     const ant = $('#p-anticipo') ? r2($('#p-anticipo').value) : 0;
     if(!f.dataset.id && ant>0) obj.abonos=[{id:'a'+Date.now().toString(36), monto:Math.min(ant,monto), fecha:obj.fechaCompra, metodo:$('#p-metodo').value+' · anticipo', nota:''}];
     await Store.put('cuentas', id, obj);
