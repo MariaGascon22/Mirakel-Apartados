@@ -46,4 +46,4 @@ Cada cambio que se sube a `main` en GitHub se publica solo en Cloudflare. La ver
 
 ## Versión
 
-La versión se ve en el inicio de sesión, abajo de cada pantalla y en *Ajustes*. Al publicar un cambio, sube el número en `VERSION_APP` (`index.html`) y en `VERSION` (`sw.js`) para que los teléfonos descarguen la versión nueva.
+La versión se ve en el inicio de sesión, abajo de cada pantalla y en *Ajustes*. Al publicar un cambio, sube el número en `VERSION_APP` (`index.html`) y en `VERSION` (`sw.js`) para que los teléfonos descarguen la versión nueva. Cuando hay versión nueva, arriba de la app aparece el botón **Actualizar**; al tocarlo se instala y la app se recarga.

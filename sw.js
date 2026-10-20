@@ -1,6 +1,6 @@
 /* MiraKel Apartados: guarda la app en el teléfono para que abra rápido.
    Los datos de clientas NO se guardan aquí: vienen de Cloudflare (carpeta /api). */
-const VERSION = 'mirakel-3.2'; // súbela junto con VERSION_APP en index.html
+const VERSION = 'mirakel-3.3'; // súbela junto con VERSION_APP en index.html
 // Lo indispensable para abrir. El generador de PDF se guarda la primera vez que se usa.
 const ARCHIVOS = ['./','./index.html','./manifest.webmanifest','./favicon.ico',
   './fonts/montserrat.woff2','./fonts/cormorant.woff2','./fonts/cormorant-italic.woff2',
@@ -8,7 +8,13 @@ const ARCHIVOS = ['./','./index.html','./manifest.webmanifest','./favicon.ico',
   './icons/icon-192.png','./icons/apple-touch-icon.png','./icons/favicon-32.png'];
 const ESPERA_RED = 3000; // con señal lenta, abre la copia guardada en vez de esperar
 
-self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting())); });
+self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(ARCHIVOS.map(a => new Request(a, { cache: 'reload' }))))); });
+// La versión nueva espera a que toques "Actualizar" en la app.
+self.addEventListener('message', e => {
+  if (!e.data) return;
+  if (e.data.tipo === 'actualizar') self.skipWaiting();
+  if (e.data.tipo === 'version' && e.source) e.source.postMessage({ tipo: 'version', version: VERSION.replace('mirakel-', '') });
+});
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   const req = e.request; const url = new URL(req.url);

@@ -124,6 +124,10 @@ p{margin:0}
 .icon-btn svg{width:18px;height:18px}
 
 /* Avisos */
+.update-bar{position:sticky;top:0;z-index:60;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px;background:var(--rose-deep);color:#fff;font-size:13.5px;font-weight:600;text-align:center}
+.update-bar[hidden]{display:none}
+.update-bar .btn{background:#fff;color:var(--rose-deep);border-color:#fff;padding:7px 16px}
+.update-bar + .login{min-height:calc(100dvh - 52px)}
 .banner{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:var(--r-sm);background:var(--blush-2);border:1px dashed var(--rose);font-size:13px}
 .banner b{color:var(--rose-ink)}
 .banner .btn{margin-left:auto}
@@ -318,6 +322,10 @@ textarea.msg{min-height:260px;font-size:14px}
 </style>
 </head>
 <body>
+<div class="update-bar" id="update-bar" role="status" hidden>
+  <span id="update-txt">Hay una versión nueva de la app</span>
+  <button type="button" class="btn btn-sm" id="update-btn">Actualizar</button>
+</div>
 
 <div class="login" id="login" hidden>
   <div class="login-card">
@@ -439,7 +447,7 @@ const CLAVE_PENDIENTES = 'mirakel-pendientes';
 const CLAVE_SESION = 'mirakel-sesion';
 const CLAVE_SUBIDO = 'mirakel-subido';
 const CLAVE_GUARDADO = 'mirakel-ultimo-guardado';
-const VERSION_APP = '3.2';
+const VERSION_APP = '3.3';
 document.querySelectorAll('[data-version]').forEach(el=>{ el.textContent = 'Versión ' + VERSION_APP; });
 
 function leerJSON(k, def){ try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : def; } catch(e){ return def; } }
@@ -1244,7 +1252,40 @@ document.addEventListener('submit', async e=>{
 });
 
 Store.init();
-if('serviceWorker' in navigator){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
+/* ============ Versión nueva: botón "Actualizar" arriba ============
+   Al publicar un cambio (VERSION en sw.js), el teléfono descarga la versión nueva en segundo
+   plano y aparece el botón. Al tocarlo, se activa y la app se recarga. */
+if('serviceWorker' in navigator){
+  let registro=null, pidio=false, recargando=false;
+  const mostrarActualizar=(sw)=>{
+    if(!sw || !navigator.serviceWorker.controller) return; // primera instalación: no hay nada que actualizar
+    $('#update-bar').hidden=false;
+    sw.postMessage({tipo:'version'});
+  };
+  navigator.serviceWorker.addEventListener('message', e=>{
+    if(e.data && e.data.tipo==='version' && e.data.version!==VERSION_APP) $('#update-txt').textContent='Hay una versión nueva: '+e.data.version;
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{ if(!pidio || recargando) return; recargando=true; location.reload(); });
+  $('#update-btn').addEventListener('click', ()=>{
+    const b=$('#update-btn'); b.disabled=true; b.textContent='Actualizando…'; pidio=true;
+    if(registro && registro.waiting) registro.waiting.postMessage({tipo:'actualizar'});
+    else location.reload();
+    setTimeout(()=>{ if(!recargando) location.reload(); }, 4000);
+  });
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      registro=reg;
+      if(reg.waiting) mostrarActualizar(reg.waiting);
+      reg.addEventListener('updatefound', ()=>{
+        const nuevo=reg.installing; if(!nuevo) return;
+        nuevo.addEventListener('statechange', ()=>{ if(nuevo.state==='installed') mostrarActualizar(nuevo); });
+      });
+      // Busca versión nueva al volver a la app y cada 30 minutos.
+      document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) reg.update().catch(()=>{}); });
+      setInterval(()=>reg.update().catch(()=>{}), 30*60*1000);
+    }).catch(()=>{});
+  });
+}
 })();
 </script>
 
