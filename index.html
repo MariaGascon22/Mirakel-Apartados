@@ -142,6 +142,7 @@ p{margin:0}
 .sug:hover,.sug:focus-visible{background:var(--blush-2)}
 .sug .avatar{width:30px;height:30px;font-size:13px}
 .sug small{display:block;font-size:12px;color:var(--muted)}
+#top-nuevo[hidden]{display:none}
 .banner{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:var(--r-sm);background:var(--blush-2);border:1px dashed var(--rose);font-size:13px}
 .banner b{color:var(--rose-ink)}
 .banner .btn{margin-left:auto}
@@ -396,7 +397,7 @@ textarea.msg{min-height:260px;font-size:14px}
       <button class="tab" data-act="nav" data-view="apartados">Apartados</button>
       <button class="tab" data-act="nav" data-view="ajustes">Ajustes</button>
     </nav>
-    <button class="btn btn-primary" data-act="nuevo-apartado" aria-label="Nuevo apartado">
+    <button class="btn btn-primary" id="top-nuevo" data-act="nuevo-apartado" aria-label="Nuevo apartado">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Nuevo apartado</span>
     </button>
   </header>
@@ -485,7 +486,7 @@ const CLAVE_PENDIENTES = 'mirakel-pendientes';
 const CLAVE_SESION = 'mirakel-sesion';
 const CLAVE_SUBIDO = 'mirakel-subido';
 const CLAVE_GUARDADO = 'mirakel-ultimo-guardado';
-const VERSION_APP = '3.10';
+const VERSION_APP = '3.11';
 document.querySelectorAll('[data-version]').forEach(el=>{ el.textContent = 'Versión ' + VERSION_APP; });
 
 function leerJSON(k, def){ try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : def; } catch(e){ return def; } }
@@ -759,6 +760,7 @@ let renderPend=false;
 function render(){ if(renderPend) return; renderPend=true; requestAnimationFrame(()=>{ renderPend=false; renderNow(); }); }
 function renderNow(){
   document.querySelectorAll('[data-act="nav"]').forEach(b=>{ if(b.dataset.view===ui.view || (ui.view==='ficha' && b.dataset.view==='clientas')) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+  $('#top-nuevo').hidden = ui.view!=='inicio'; // el botón + de arriba solo en Inicio
   renderBanner(); renderSync();
   const main=$('#main');
   if(Store.mode==='cargando' || !(data.cargado.clientas && data.cargado.cuentas)){ return; }
